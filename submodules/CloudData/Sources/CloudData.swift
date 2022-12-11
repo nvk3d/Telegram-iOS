@@ -15,38 +15,39 @@ private func fetchRawData(prefix: String) -> Signal<Data, FetchError> {
         #if targetEnvironment(simulator)
         return EmptyDisposable
         #else
-        let container = CKContainer.default()
-        let publicDatabase = container.database(with: .public)
-        let recordId = CKRecord.ID(recordName: "emergency-datacenter-\(prefix)")
-        publicDatabase.fetch(withRecordID: recordId, completionHandler: { record, error in
-            if let error = error {
-                print("publicDatabase.fetch error: \(error)")
-                let nsError = error as NSError
-                if nsError.domain == CKError.errorDomain, nsError.code == 1 {
-                    subscriber.putError(.networkUnavailable)
-                } else {
-                    subscriber.putError(.generic)
-                }
-            } else if let record = record {
-                guard let dataString = record.object(forKey: "data") as? String else {
-                    subscriber.putError(.generic)
-                    return
-                }
-                guard let data = Data(base64Encoded: dataString, options: [.ignoreUnknownCharacters]) else {
-                    subscriber.putError(.generic)
-                    return
-                }
-                var resultData = data
-                resultData.count = 256
-                subscriber.putNext(resultData)
-                subscriber.putCompletion()
-            } else {
-                subscriber.putError(.generic)
-            }
-        })
-        
-        return ActionDisposable {
-        }
+        return EmptyDisposable
+//        let container = CKContainer.default()
+//        let publicDatabase = container.database(with: .public)
+//        let recordId = CKRecord.ID(recordName: "emergency-datacenter-\(prefix)")
+//        publicDatabase.fetch(withRecordID: recordId, completionHandler: { record, error in
+//            if let error = error {
+//                print("publicDatabase.fetch error: \(error)")
+//                let nsError = error as NSError
+//                if nsError.domain == CKError.errorDomain, nsError.code == 1 {
+//                    subscriber.putError(.networkUnavailable)
+//                } else {
+//                    subscriber.putError(.generic)
+//                }
+//            } else if let record = record {
+//                guard let dataString = record.object(forKey: "data") as? String else {
+//                    subscriber.putError(.generic)
+//                    return
+//                }
+//                guard let data = Data(base64Encoded: dataString, options: [.ignoreUnknownCharacters]) else {
+//                    subscriber.putError(.generic)
+//                    return
+//                }
+//                var resultData = data
+//                resultData.count = 256
+//                subscriber.putNext(resultData)
+//                subscriber.putCompletion()
+//            } else {
+//                subscriber.putError(.generic)
+//            }
+//        })
+//
+//        return ActionDisposable {
+//        }
         #endif
     }
 }

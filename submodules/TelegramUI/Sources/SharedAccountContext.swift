@@ -665,7 +665,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                             
                             if call.isStream {
                                 strongSelf.hasGroupCallOnScreenPromise.set(true)
-                                let groupCallController = MediaStreamComponentController(call: call)
+                                //let groupCallController = MediaStreamComponentController(call: call)
+                                let groupCallController = StreamChatControllerImpl(sharedContext: strongSelf, accountContext: call.accountContext, call: call)
                                 groupCallController.onViewDidAppear = { [weak self] in
                                     if let strongSelf = self {
                                         strongSelf.hasGroupCallOnScreenPromise.set(true)

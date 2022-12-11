@@ -20,6 +20,7 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
             
             case blurred(isFilled: Bool)
             case color(Color)
+            case gradientDiagonal([UInt32], CGFloat)
             
             var isFilled: Bool {
                 if case let .blurred(isFilled) = self {
@@ -47,6 +48,7 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
             case cancel
             case share
             case screencast
+            case expand
         }
         
         var appearance: Appearance
@@ -179,7 +181,7 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
             switch content.appearance {
             case .blurred:
                 self.effectView.isHidden = false
-            case .color:
+            case .color, .gradientDiagonal:
                 self.effectView.isHidden = true
             }
             
@@ -240,6 +242,9 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
                             context.setBlendMode(.copy)
                         }
                     }
+                    context.setFillColor(fillColor.cgColor)
+                    context.fillEllipse(in: ellipseRect)
+
                 case let .color(color):
                     switch color {
                     case .red:
@@ -249,10 +254,23 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
                     case let .custom(color, alpha):
                         fillColor = UIColor(rgb: color, alpha: alpha)
                     }
+                    context.setFillColor(fillColor.cgColor)
+                    context.fillEllipse(in: ellipseRect)
+
+                case let .gradientDiagonal(colors, alpha):
+                    let gradientColors = colors.map { UIColor(rgb: $0, alpha: alpha).cgColor } as CFArray
+
+                    var locations: [CGFloat] = []
+                    for i in 0 ..< colors.count {
+                        let t = CGFloat(i) / CGFloat(colors.count - 1)
+                        locations.append(t)
+                    }
+                    let colorSpace = CGColorSpaceCreateDeviceRGB()
+                    let gradient = CGGradient(colorsSpace: colorSpace, colors: gradientColors, locations: &locations)!
+                    context.addEllipse(in: CGRect(origin: .zero, size: ellipseRect.size))
+                    context.clip()
+                    context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: ellipseRect.height), end: CGPoint(x: ellipseRect.width, y: 0.0), options: CGGradientDrawingOptions())
                 }
-                
-                context.setFillColor(fillColor.cgColor)
-                context.fillEllipse(in: ellipseRect)
                 
                 var image: UIImage?
                 
@@ -304,6 +322,9 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
                     if let iconImage = generateTintedImage(image: UIImage(bundleImageName: "Call/ScreenSharePhone"), color: imageColor) {
                         image = generateScaledImage(image: iconImage, size: iconImage.size.aspectFitted(CGSize(width: 38.0, height: 38.0)))
                     }
+
+                case .expand:
+                    image = generateTintedImage(image: UIImage(bundleImageName: "Call/CallExpandButton"), color: imageColor)
                 }
             
                 if let image = image {
@@ -363,6 +384,9 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
                     } else {
                         fillColor = UIColor(white: 1.0, alpha: 0.2)
                     }
+                    context.setFillColor(fillColor.cgColor)
+                    context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
+
                 case let .color(color):
                     switch color {
                     case .red:
@@ -372,10 +396,24 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
                     case let .custom(color, _):
                         fillColor = UIColor(rgb: color).withMultipliedBrightnessBy(0.2).withAlphaComponent(0.2)
                     }
+                    context.setFillColor(fillColor.cgColor)
+                    context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
+
+                case let .gradientDiagonal(colors, alpha):
+                    let gradientColors = colors.map { UIColor(rgb: $0, alpha: alpha).cgColor } as CFArray
+
+                    var locations: [CGFloat] = []
+                    for i in 0 ..< colors.count {
+                        let t = CGFloat(i) / CGFloat(colors.count - 1)
+                        locations.append(t)
+                    }
+                    let colorSpace = CGColorSpaceCreateDeviceRGB()
+                    let gradient = CGGradient(colorsSpace: colorSpace, colors: gradientColors, locations: &locations)!
+                    context.addEllipse(in: CGRect(origin: .zero, size: size))
+                    context.clip()
+
+                    context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: size.height), end: CGPoint(x: size.width, y: 0.0), options: CGGradientDrawingOptions())
                 }
-                
-                context.setFillColor(fillColor.cgColor)
-                context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
             })
         }
         

@@ -321,6 +321,37 @@ public func generateTintedImage(image: UIImage?, color: UIColor, backgroundColor
     return tintedImage
 }
 
+public func generateTintedImageCircle(image: UIImage?, color: UIColor, backgroundColor: UIColor? = nil, scale: CGFloat = 1.0) -> UIImage? {
+    guard let image = image else {
+        return nil
+    }
+
+    let imageSize = image.size
+
+    UIGraphicsBeginImageContextWithOptions(imageSize, false, image.scale)
+    if let context = UIGraphicsGetCurrentContext() {
+        if let backgroundColor = backgroundColor {
+            context.setFillColor(backgroundColor.cgColor)
+            context.fillEllipse(in: CGRect(origin: CGPoint(), size: imageSize))
+        }
+
+        let imageRect = CGRect(origin: CGPoint(), size: imageSize)
+        context.saveGState()
+        context.translateBy(x: imageRect.midX, y: imageRect.midY)
+        context.scaleBy(x: scale, y: -scale)
+        context.translateBy(x: -imageRect.midX, y: -imageRect.midY)
+        context.clip(to: imageRect, mask: image.cgImage!)
+        context.setFillColor(color.cgColor)
+        context.fill(imageRect)
+        context.restoreGState()
+    }
+
+    let tintedImage = UIGraphicsGetImageFromCurrentImageContext()!
+    UIGraphicsEndImageContext()
+
+    return tintedImage
+}
+
 public func generateGradientTintedImage(image: UIImage?, colors: [UIColor]) -> UIImage? {
     guard let image = image else {
         return nil
