@@ -148,6 +148,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
     private var peerPreviewImageExist: Bool = false
     private var peerAvatarImageExist: Bool = false
 
+    private var callStateDisposable: Disposable?
     private var bufferDisposable: Disposable?
     private var peerViewDisposable: Disposable?
     private var peerImageDisposable: Disposable?
@@ -254,6 +255,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         expandPictureInPictureButton.setImage(generateTintedImage(image: UIImage(bundleImageName: "Media Gallery/PictureInPictureButton"), color: .white), for: .normal)
 
         optionsButton = VoiceChatHeaderButton(context: context)
+        optionsButton.alpha = 0.0
         optionsButton.setContent(.more(optionsCircleImage(dark: false)))
 
         titleNode = StreamChatTitleNode(theme: presentationData.theme)
@@ -305,6 +307,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
     }
 
     deinit {
+        callStateDisposable?.dispose()
         bufferDisposable?.dispose()
         peerViewDisposable?.dispose()
         peerImageDisposable?.dispose()
@@ -488,6 +491,11 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
     }
 
     private func setupCallUpdates() {
+        callStateDisposable = call.state.start { [weak self] state in
+            guard let self = self else { return }
+            self.optionsButton.alpha = state.adminIds.contains(self.call.account.peerId) ? 1.0 : 0.0
+        }
+
         let titleSignal: Signal<String?, NoError> = call.state
         |> map { state -> String? in
             state.title
