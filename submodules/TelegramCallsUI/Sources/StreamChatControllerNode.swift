@@ -48,6 +48,7 @@ struct StreamChatControllerNodeBehaviorNodes {
 
     let expandShareButton: ASButtonNode
     let expandBottomTitleNode: ASTextNode
+    let expandBottomSubtitleNode: ASTextNode
     let expandExpandButton: ASButtonNode
 }
 
@@ -174,6 +175,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         expandBottomPanelNode: expandBottomPanelNode,
         expandShareButton: expandShareButton,
         expandBottomTitleNode: expandBottomTitleNode,
+        expandBottomSubtitleNode: expandBottomSubtitleNode,
         expandExpandButton: expandExpandButton
     ), requestStatusBarStyleUpdated: { [weak self] statusBarStyle in self?.requestStatusBarStyleUpdated?(statusBarStyle) })
 
@@ -203,6 +205,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
 
     private let expandShareButton: ASButtonNode
     private let expandBottomTitleNode: ASTextNode
+    private let expandBottomSubtitleNode: ASTextNode
     private let expandExpandButton: ASButtonNode
 
     // MARK: - Init
@@ -283,6 +286,12 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         expandBottomTitleNode.maximumNumberOfLines = 2
         expandBottomTitleNode.truncationMode = .byTruncatingTail
         expandBottomTitleNode.isOpaque = false
+
+        expandBottomSubtitleNode = ASTextNode()
+        expandBottomSubtitleNode.displaysAsynchronously = false
+        expandBottomSubtitleNode.maximumNumberOfLines = 2
+        expandBottomSubtitleNode.truncationMode = .byTruncatingTail
+        expandBottomSubtitleNode.isOpaque = false
 
         expandExpandButton = ASButtonNode()
         expandExpandButton.setImage(generateTintedImage(image: UIImage(bundleImageName: "Media Gallery/Minimize"), color: .white), for: .normal)
@@ -472,6 +481,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         expandBottomPanelNode.addSubnode(expandShareButton)
 
         expandBottomPanelNode.addSubnode(expandBottomTitleNode)
+        expandBottomPanelNode.addSubnode(expandBottomSubtitleNode)
 
         expandExpandButton.addTarget(self, action: #selector(expandExpandButtonAction(_:)), forControlEvents: .touchUpInside)
         expandBottomPanelNode.addSubnode(expandExpandButton)
@@ -491,6 +501,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
 
             let title: String = title ?? enginePeer.displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)
             self.titleNode.setTitle(title, transition: .immediate)
+            self.expandBottomTitleNode.attributedText = NSAttributedString(string: title, font: Font.bold(15.0), textColor: .white)
 
             if !self.peerPreviewImageFetched {
                 self.peerPreviewImageFetched = true
@@ -542,7 +553,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
             let title = self.numberFormatter.string(from: NSNumber(value: membersCount))
             self.watchingNode.setTitle(title ?? "\(membersCount)", transition: .animated(duration: 0.4, curve: .spring))
 
-            self.expandBottomTitleNode.attributedText = NSAttributedString(string: "\(title ?? "0") viewers", font: Font.regular(14.0), textColor: .white)
+            self.expandBottomSubtitleNode.attributedText = NSAttributedString(string: "\(title ?? "0") viewers", font: Font.regular(14.0), textColor: .white)
             self.layout.flatMap { self.containerLayoutUpdated($0, transition: .immediate) }
         })
 

@@ -39,6 +39,7 @@ final class StreamChatControllerNodePreviewBehavior: StreamChatControllerNodeBeh
 
     private var expandShareButton: ASButtonNode { nodes.expandShareButton }
     private var expandBottomTitleNode: ASTextNode { nodes.expandBottomTitleNode }
+    private var expandBottomSubtitleNode: ASTextNode { nodes.expandBottomSubtitleNode }
     private var expandExpandButton: ASButtonNode { nodes.expandExpandButton }
 
     // MARK: - Init
@@ -184,13 +185,24 @@ final class StreamChatControllerNodePreviewBehavior: StreamChatControllerNodeBeh
         transition.updateFrame(node: expandShareButton, frame: expandShareFrame)
 
         let expandBottomTitleSize = expandBottomTitleNode.measure(CGSize(width: layout.size.width, height: 44.0))
+        let expandBottomSubtitleSize = expandBottomSubtitleNode.measure(CGSize(width: layout.size.width, height: 44.0))
+        let titlesSize = CGSize(width: layout.size.width, height: expandTitleSize.height + expandBottomSubtitleSize.height)
+
         let expandBottomTitleFrame = CGRect(
             x: (layout.size.width - expandBottomTitleSize.width) / 2.0,
-            y: (44.0 - expandBottomTitleSize.height) / 2.0,
+            y: (44.0 - titlesSize.height) / 2.0,
             width: expandBottomTitleSize.width,
             height: expandBottomTitleSize.height
         )
         transition.updateFrame(node: expandBottomTitleNode, frame: expandBottomTitleFrame)
+
+        let expandBottomSubtitleFrame = CGRect(
+            x: (layout.size.width - expandBottomSubtitleSize.width) / 2.0,
+            y: expandBottomTitleFrame.maxY,
+            width: expandBottomSubtitleSize.width,
+            height: expandBottomSubtitleSize.height
+        )
+        transition.updateFrame(node: expandBottomSubtitleNode, frame: expandBottomSubtitleFrame)
 
         let expandExpandFrame = CGRect(
             origin: CGPoint(x: layout.size.width - layout.safeInsets.right - 44.0 - 16.0, y: 0.0),
