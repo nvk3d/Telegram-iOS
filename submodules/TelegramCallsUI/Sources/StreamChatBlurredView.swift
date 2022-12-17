@@ -66,6 +66,23 @@ final class StreamChatBlurredView: UIVisualEffectView {
         }
     }
 
+    var saturationDeltaFactor: Double {
+        get {
+            if #available(iOS 14.0, *) {
+                return ios14_saturationDeltaFactor
+            } else {
+                return _value(forKey: .saturationDeltaFactor) ?? 0.0
+            }
+        }
+        set {
+            if #available(iOS 14.0, *) {
+                ios14_saturationDeltaFactor = newValue
+            } else {
+                _setValue(newValue, forKey: .saturationDeltaFactor)
+            }
+        }
+    }
+
     /**
      Scale factor.
 
@@ -133,7 +150,13 @@ private extension StreamChatBlurredView {
     }
 
     enum Key: String {
-        case colorTint, colorTintAlpha, blurRadius, scale
+        // MARK: - Cases
+
+        case colorTint
+        case colorTintAlpha
+        case blurRadius
+        case scale
+        case saturationDeltaFactor
     }
 
 }
@@ -162,6 +185,16 @@ private extension UIVisualEffectView {
             overlayView?.backgroundColor = newValue
         }
     }
+    var ios14_saturationDeltaFactor: Double {
+        get {
+            return backdropView?.requestedValues?["inputAmount"] as? Double ?? 0
+        }
+        set {
+            prepareForChanges()
+            _saturationDeltaFactor?.requestedValues?["inputAmount"] = newValue
+            applyChanges()
+        }
+    }
 }
 
 private extension UIVisualEffectView {
@@ -173,6 +206,9 @@ private extension UIVisualEffectView {
     }
     var gaussianBlur: NSObject? {
         return backdropView?.value(forKey: "filters", withFilterType: "gaussianBlur")
+    }
+    var _saturationDeltaFactor: NSObject? {
+        return backdropView?.value(forKey: "filters", withFilterType: "colorSaturate")
     }
     var sourceOver: NSObject? {
         return overlayView?.value(forKey: "viewEffects", withFilterType: "sourceOver")
@@ -192,7 +228,8 @@ private extension NSObject {
         set { setValue(newValue, forKeyPath: "requestedValues") }
     }
     func value(forKey key: String, withFilterType filterType: String) -> NSObject? {
-        return (value(forKeyPath: key) as? [NSObject])?.first { $0.value(forKeyPath: "filterType") as? String == filterType }
+        let values = (value(forKeyPath: key) as? [NSObject]) ?? []
+        return values.first { $0.value(forKeyPath: "filterType") as? String == filterType }
     }
 }
 

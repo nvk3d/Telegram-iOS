@@ -80,12 +80,6 @@ final class StreamChatBottomPanelNode: ASDisplayNode {
             text: presentationData.strings.VoiceChat_Leave,
             transition: transition
         )
-
-        // Gradient colors
-//        UIColor(rgb: 0x0077ff),
-//        UIColor(rgb: 0x6b93ff),
-//        UIColor(rgb: 0x8878ff),
-//        UIColor(rgb: 0xe46ace)
     }
 
     // MARK: - Private. Actions

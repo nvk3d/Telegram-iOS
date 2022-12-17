@@ -11,7 +11,7 @@ final class StreamChatWatchingNode: ASDisplayNode {
 
     // MARK: - Nodes
 
-    private let titleNode: ASTextNode
+    private let titleNode: StreamChatWatchingTitleNode
     private let subtitleNode: ASTextNode
 
     // MARK: - Init
@@ -19,11 +19,7 @@ final class StreamChatWatchingNode: ASDisplayNode {
     init(theme: PresentationTheme) {
         self.theme = theme
 
-        titleNode = ASTextNode()
-        titleNode.displaysAsynchronously = false
-        titleNode.maximumNumberOfLines = 1
-        titleNode.truncationMode = .byTruncatingTail
-        titleNode.isOpaque = false
+        titleNode = StreamChatWatchingTitleNode(theme: theme)
 
         subtitleNode = ASTextNode()
         subtitleNode.displaysAsynchronously = false
@@ -41,7 +37,7 @@ final class StreamChatWatchingNode: ASDisplayNode {
     func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         self.layout = layout
 
-        let titleSize = titleNode.measure(layout.size)
+        let titleSize = CGSize(width: layout.size.width - 32.0, height: 50.0)
         let subtitleSize = subtitleNode.measure(layout.size)
 
         let contentHeight: CGFloat = titleSize.height + subtitleSize.height
@@ -51,6 +47,7 @@ final class StreamChatWatchingNode: ASDisplayNode {
             size: titleSize
         )
         transition.updateFrame(node: titleNode, frame: titleFrame)
+        titleNode.containerLayoutUpdated(layout.withUpdatedSize(titleSize), transition: transition)
 
         let subtitleFrame = CGRect(
             origin: CGPoint(x: (layout.size.width - subtitleSize.width) / 2.0, y: titleFrame.maxY),
@@ -62,19 +59,7 @@ final class StreamChatWatchingNode: ASDisplayNode {
     // MARK: - Interface
 
     func setTitle(_ title: String, transition: ContainedViewLayoutTransition) {
-        if case .animated = transition, title != titleNode.attributedText?.string, let snapshotView = titleNode.view.snapshotContentTree() {
-            snapshotView.frame = titleNode.frame
-            view.addSubview(snapshotView)
-
-            snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false) { [weak snapshotView] _ in
-                snapshotView?.removeFromSuperview()
-            }
-
-            titleNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-        }
-
-        titleNode.attributedText = NSAttributedString(string: title, font: Font.bold(48.0), textColor: UIColor(rgb: 0xffffff))
-        layout.flatMap { containerLayoutUpdated($0, transition: transition) }
+        titleNode.setTitle(title, transition: transition)
     }
 
     func setSubtitle(_ subtitle: String, transition: ContainedViewLayoutTransition) {

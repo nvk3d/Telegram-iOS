@@ -11,7 +11,14 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
     private var isLayoutUpdating: Bool = false
     private var videoAspectUpdate: ((ContainerViewLayout) -> Void)?
 
-    private var isPanelsHidden: Bool = false
+    private var isPanelsHidden: Bool = true
+
+    private var expandTopPanelHeight: CGFloat {
+        (layout?.statusBarHeight ?? 0.0) + 44.0
+    }
+    private var expandBottomPanelHeight: CGFloat {
+        (layout?.intrinsicInsets.bottom ?? 0.0) + 44.0
+    }
 
     // MARK: - Nodes
 
@@ -132,7 +139,7 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
 
         let bottomPanelWidth = layout.size.width - layout.safeInsets.left - layout.safeInsets.right
         let bottomPanelFrame = CGRect(
-            origin: CGPoint(x: layout.safeInsets.left, y: contentContainerHeight - bottomPanelHeight - layout.safeInsets.bottom - bottomPanelMargin),
+            origin: CGPoint(x: layout.safeInsets.left, y: watchingFrame.maxY + bottomPanelMargin),
             size: CGSize(width: bottomPanelWidth, height: bottomPanelHeight)
         )
         transition.updateFrame(node: bottomPanelNode, frame: bottomPanelFrame)
@@ -143,7 +150,8 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
         bottomPanelNode.containerLayoutUpdated(bottomPanelLayout, transition: transition)
 
         // expand
-        let expandTopPanelFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: (layout.statusBarHeight ?? 0.0) + 44.0))
+        let expandTopPanelY: CGFloat = isPanelsHidden ? -expandBottomPanelHeight : 0.0
+        let expandTopPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: expandTopPanelY), size: CGSize(width: layout.size.width, height: expandTopPanelHeight))
         transition.updateFrame(node: expandTopPanelNode, frame: expandTopPanelFrame)
 
         let expandButtonHeight: CGFloat = 44.0
@@ -174,8 +182,9 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
         )
         transition.updateFrame(node: expandPictureInPictureButton, frame: expandPictureInPictureFrame)
 
-        let expandBottomHeight: CGFloat = layout.intrinsicInsets.bottom + 44.0
-        let expandBottomPanelFrame = CGRect(x: 0.0, y: layout.size.height - expandBottomHeight, width: layout.size.width, height: expandBottomHeight)
+        let expandBottomHeight = expandBottomPanelHeight
+        let expandBottomPanelY: CGFloat = isPanelsHidden ? layout.size.height : layout.size.height - expandBottomHeight
+        let expandBottomPanelFrame = CGRect(x: 0.0, y: expandBottomPanelY, width: layout.size.width, height: expandBottomHeight)
         transition.updateFrame(node: expandBottomPanelNode, frame: expandBottomPanelFrame)
 
         let expandShareFrame = CGRect(
@@ -213,8 +222,7 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
         transition.updateAlpha(node: contentContainerNode, alpha: 1.0)
 
         if !isPanelsHidden {
-            transition.updateAlpha(node: expandTopPanelNode, alpha: 1.0)
-            transition.updateAlpha(node: expandBottomPanelNode, alpha: 1.0)
+            setPanelsHidden(isPanelsHidden, transition: transition)
         }
 
         containerLayoutUpdated(layout, transition: transition)
@@ -224,12 +232,10 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
     func animateOut(_ completion: (() -> Void)?) {
         dimNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false)
 
-        let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .easeInOut)
-
-        transition.updateAlpha(node: expandTopPanelNode, alpha: 0.0)
-        transition.updateAlpha(node: expandBottomPanelNode, alpha: 0.0)
-
         isPanelsHidden = true
+
+        let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .easeInOut)
+        setPanelsHidden(isPanelsHidden, transition: transition)
 
         transition.updateAlpha(node: contentContainerNode, alpha: 0.0) { _ in
             completion?()
@@ -237,12 +243,10 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
     }
 
     func tapGestureAction() {
-        let transition: ContainedViewLayoutTransition = .animated(duration: 0.3, curve: .slide)
-
-        transition.updateAlpha(node: expandTopPanelNode, alpha: isPanelsHidden ? 1.0 : 0.0)
-        transition.updateAlpha(node: expandBottomPanelNode, alpha: isPanelsHidden ? 1.0 : 0.0)
-
         isPanelsHidden.toggle()
+
+        let transition: ContainedViewLayoutTransition = .animated(duration: 0.3, curve: .slide)
+        setPanelsHidden(isPanelsHidden, transition: transition)
     }
 
     func videoAspectUpdated() {
@@ -285,5 +289,10 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
         }
 
         return CGSize(width: videoWidth, height: videoHeight)
+    }
+
+    private func setPanelsHidden(_ hidden: Bool, transition: ContainedViewLayoutTransition) {
+        guard let layout = layout else { return }
+        containerLayoutUpdated(layout, transition: transition)
     }
 }

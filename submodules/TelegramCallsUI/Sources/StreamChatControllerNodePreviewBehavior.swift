@@ -9,6 +9,7 @@ final class StreamChatControllerNodePreviewBehavior: StreamChatControllerNodeBeh
     private var layout: ContainerViewLayout?
 
     private var isLayoutUpdating: Bool = false
+    private var requestedLayout: (ContainerViewLayout, ContainedViewLayoutTransition)?
     private var videoAspectUpdate: ((ContainerViewLayout) -> Void)?
 
     // MARK: - Nodes
@@ -66,6 +67,8 @@ final class StreamChatControllerNodePreviewBehavior: StreamChatControllerNodeBeh
     }
 
     func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
+        guard !isLayoutUpdating else { requestedLayout = (layout, transition); return }
+
         self.layout = layout
         isLayoutUpdating = true
 
@@ -138,7 +141,8 @@ final class StreamChatControllerNodePreviewBehavior: StreamChatControllerNodeBeh
         bottomPanelNode.containerLayoutUpdated(bottomPanelLayout, transition: transition)
 
         // expand
-        let expandTopPanelFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: (layout.statusBarHeight ?? 0.0) + 44.0))
+        let expandTopPanelHeight = (layout.statusBarHeight ?? 0.0) + 44.0
+        let expandTopPanelFrame = CGRect(origin: CGPoint(x: 0.0, y: -expandTopPanelHeight), size: CGSize(width: layout.size.width, height: expandTopPanelHeight))
         transition.updateFrame(node: expandTopPanelNode, frame: expandTopPanelFrame)
 
         let expandButtonHeight: CGFloat = 44.0
@@ -170,7 +174,7 @@ final class StreamChatControllerNodePreviewBehavior: StreamChatControllerNodeBeh
         transition.updateFrame(node: expandPictureInPictureButton, frame: expandPictureInPictureFrame)
 
         let expandBottomHeight: CGFloat = layout.intrinsicInsets.bottom + 44.0
-        let expandBottomPanelFrame = CGRect(x: 0.0, y: layout.size.height - expandBottomHeight, width: layout.size.width, height: expandBottomHeight)
+        let expandBottomPanelFrame = CGRect(x: 0.0, y: layout.size.height, width: layout.size.width, height: expandBottomHeight)
         transition.updateFrame(node: expandBottomPanelNode, frame: expandBottomPanelFrame)
 
         let expandShareFrame = CGRect(
@@ -201,6 +205,8 @@ final class StreamChatControllerNodePreviewBehavior: StreamChatControllerNodeBeh
         guard let layout = layout else { return }
 
         requestStatusBarStyleUpdated?(.Ignore)
+
+        ContainedViewLayoutTransition.immediate.updateAlpha(node: contentContainerNode, alpha: 1.0)
 
         let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
         contentContainerNode.frame.origin.y = layout.size.height
@@ -235,6 +241,11 @@ final class StreamChatControllerNodePreviewBehavior: StreamChatControllerNodeBeh
 
     private func completeUpdates() {
         guard let layout = layout else { return }
+
+        if let requestedLayout = requestedLayout {
+            self.requestedLayout = nil
+            containerLayoutUpdated(requestedLayout.0, transition: requestedLayout.1)
+        }
 
         if let videoAspectUpdate = videoAspectUpdate {
             self.videoAspectUpdate = nil

@@ -183,20 +183,21 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
     private let contentContainerNode: ASDisplayNode
 
     private let topPanelNode: ASDisplayNode
-    private let expandTopPanelNode: ASDisplayNode
 
     private let optionsButton: VoiceChatHeaderButton
     private let titleNode: StreamChatTitleNode
     private let pictureInPictureButton: VoiceChatHeaderButton
 
-    private let expandCloseButton: ASButtonNode
-    private let expandTopTitleNode: ASTextNode
-    private let expandPictureInPictureButton: ASButtonNode
-
     private let videoNode: StreamChatVideoNode
     private let watchingNode: StreamChatWatchingNode
 
     private let bottomPanelNode: StreamChatBottomPanelNode
+
+    private let expandTopPanelNode: ASDisplayNode
+
+    private let expandCloseButton: ASButtonNode
+    private let expandTopTitleNode: ASTextNode
+    private let expandPictureInPictureButton: ASButtonNode
 
     private let expandBottomPanelNode: ASDisplayNode
 
@@ -313,7 +314,10 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         view.disablesInteractiveModalDismiss = true
 
         dimNode.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(dimTapGesture(_:))))
-        contentContainerNode.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(contentTapGesture(_:))))
+
+        let contentTapGesture = UITapGestureRecognizer(target: self, action: #selector(contentTapGesture(_:)))
+        contentTapGesture.delegate = self
+        contentContainerNode.view.addGestureRecognizer(contentTapGesture)
 
 //        let panRecognizer = DirectionalPanGestureRecognizer(target: self, action: #selector(panGesture(_:)))
 //        panRecognizer.delegate = self
@@ -333,7 +337,14 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         let prevLayout = self.layout
         self.layout = layout
 
-        if layout.orientation == .landscape, (behavior is StreamChatControllerNodePreviewBehavior) {
+        switch layout.orientation {
+        case .portrait:
+            guard behavior is StreamChatControllerNodeExpandBehavior else { break }
+            behavior = StreamChatControllerNodePreviewBehavior(nodes: behavior.nodes, requestStatusBarStyleUpdated: behavior.requestStatusBarStyleUpdated)
+            behavior.didLoad(animated: prevLayout != nil)
+
+        case .landscape:
+            guard behavior is StreamChatControllerNodePreviewBehavior else { break }
             behavior = StreamChatControllerNodeExpandBehavior(nodes: behavior.nodes, requestStatusBarStyleUpdated: behavior.requestStatusBarStyleUpdated)
             behavior.didLoad(animated: prevLayout != nil)
         }
@@ -342,6 +353,13 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
     }
 
     // MARK: - Life cycle. Gestures
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if let contentTapGesture = gestureRecognizer as? UITapGestureRecognizer, contentTapGesture.view === contentContainerNode.view {
+            return behavior is StreamChatControllerNodeExpandBehavior
+        }
+        return true
+    }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer is UIPanGestureRecognizer && otherGestureRecognizer is UIPanGestureRecognizer {
@@ -358,7 +376,9 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         isBeingDismissed = false
 
         if layout.size != UIScreen.main.bounds.size {
-            layout = layout.withUpdatedSize(UIScreen.main.bounds.size)
+            layout = layout
+                .withUpdatedIntrinsicInsets(UIApplication.shared.keyWindow?.safeAreaInsets ?? layout.intrinsicInsets)
+                .withUpdatedSize(UIScreen.main.bounds.size)
         }
 
         containerLayoutUpdated(layout, transition: .immediate)
@@ -402,6 +422,10 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
             guard let self = self else { return }
             self.controller?.dismiss(closing: true)
         }
+        videoNode.requestSmoothCornersForPictureInPicture = { [weak self] in
+            guard let self = self else { return false }
+            return self.behavior is StreamChatControllerNodePreviewBehavior
+        }
         contentContainerNode.addSubnode(videoNode)
 
         contentContainerNode.addSubnode(topPanelNode)
@@ -410,7 +434,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         optionsButton.addTarget(self, action: #selector(optionsButtonAction(_:)), forControlEvents: .touchUpInside)
         topPanelNode.addSubnode(optionsButton)
 
-        pictureInPictureButton.addTarget(self, action: #selector(expandPictureInPictureButtonAction(_:)), forControlEvents: .touchUpInside)
+        pictureInPictureButton.addTarget(self, action: #selector(pictureInPictureButtonAction(_:)), forControlEvents: .touchUpInside)
         pictureInPictureButton.layer.opacity = isPictureInPictureSupported ? 1.0 : 0.0
         topPanelNode.addSubnode(pictureInPictureButton)
 
@@ -423,18 +447,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
 
         bottomPanelNode.expandTapped = { [weak self] in
             guard let self = self else { return }
-            guard let layout = self.layout else { return }
-
-            self.behavior = StreamChatControllerNodeExpandBehavior(nodes: self.behavior.nodes, requestStatusBarStyleUpdated: self.behavior.requestStatusBarStyleUpdated)
-            self.behavior.didLoad(animated: true)
-
-            switch layout.orientation {
-            case .portrait:
-                self.sharedContext.applicationBindings.forceOrientation(.landscapeRight)
-
-            case .landscape:
-                self.containerLayoutUpdated(layout, transition: .immediate)
-            }
+            self.sharedContext.applicationBindings.forceOrientation(.landscapeRight)
         }
 
         bottomPanelNode.leaveTapped = { [weak self] in
@@ -450,7 +463,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         expandTopTitleNode.attributedText = NSAttributedString(string: "Live Stream", font: Font.bold(17.0), textColor: .white)
         expandTopPanelNode.addSubnode(expandTopTitleNode)
 
-        expandPictureInPictureButton.addTarget(self, action: #selector(pictureInPictureButtonAction(_:)), forControlEvents: .touchUpInside)
+        expandPictureInPictureButton.addTarget(self, action: #selector(expandPictureInPictureButtonAction(_:)), forControlEvents: .touchUpInside)
         expandTopPanelNode.addSubnode(expandPictureInPictureButton)
 
         addSubnode(expandBottomPanelNode)
@@ -527,7 +540,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
 
             let membersCount = max(0, members?.totalCount ?? 0)
             let title = self.numberFormatter.string(from: NSNumber(value: membersCount))
-            self.watchingNode.setTitle(title ?? "\(membersCount)", transition: .animated(duration: 0.2, curve: .slide))
+            self.watchingNode.setTitle(title ?? "\(membersCount)", transition: .animated(duration: 0.4, curve: .spring))
 
             self.expandBottomTitleNode.attributedText = NSAttributedString(string: "\(title ?? "0") viewers", font: Font.regular(14.0), textColor: .white)
             self.layout.flatMap { self.containerLayoutUpdated($0, transition: .immediate) }
@@ -576,8 +589,12 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
     private func pictureInPictureButtonAction(_ button: VoiceChatHeaderButton) {
         button.play()
 
-        videoNode.activatePictureInPicture { [weak self] in
-            self?.controller?.dismiss(closing: false, manual: true)
+        if videoNode.isPictureInPictureActive {
+            videoNode.deactivatePictureInPicture(smoothCorners: behavior is StreamChatControllerNodePreviewBehavior)
+        } else {
+            videoNode.activatePictureInPicture(smoothCorners: behavior is StreamChatControllerNodePreviewBehavior) { [weak self] in
+                self?.controller?.dismiss(closing: false, manual: true)
+            }
         }
     }
 
@@ -600,19 +617,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
 
     @objc
     private func expandExpandButtonAction(_ button: ASButtonNode) {
-        guard let layout = layout else { return }
-
-        behavior = StreamChatControllerNodePreviewBehavior(nodes: behavior.nodes, requestStatusBarStyleUpdated: behavior.requestStatusBarStyleUpdated)
-        behavior.didLoad(animated: true)
-
-        switch layout.orientation {
-        case .portrait:
-            let transition: ContainedViewLayoutTransition = .animated(duration: 0.3, curve: .slide)
-            containerLayoutUpdated(layout, transition: transition)
-
-        case .landscape:
-            sharedContext.applicationBindings.forceOrientation(.portrait)
-        }
+        sharedContext.applicationBindings.forceOrientation(.portrait)
     }
 
     // MARK: - Updates

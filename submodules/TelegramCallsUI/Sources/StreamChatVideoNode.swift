@@ -20,11 +20,15 @@ final class StreamChatVideoNode: ASDisplayNode {
 
     // MARK: - Properties
 
+    var isPictureInPictureActive: Bool { pictureInPictureController?.isPictureInPictureActive ?? false }
+
     var requestAspectUpdated: (() -> Void)?
 
     var requestBackControllerForPictureInPicture: (() -> Void)?
     var requestClosePictureInPicture: (() -> Void)?
     private var requestedExpansion: Bool = false
+
+    var requestSmoothCornersForPictureInPicture: (() -> Bool)?
 
     private(set) var mode: Mode = .offline
 
@@ -64,7 +68,8 @@ final class StreamChatVideoNode: ASDisplayNode {
         imageNode.displayWithoutProcessing = true
 
         blurredView = StreamChatBlurredView(effect: UIBlurEffect(style: .light))
-        blurredView.colorTint = .clear
+        blurredView.colorTint = nil
+        blurredView.saturationDeltaFactor = 1.0
         blurredView.blurRadius = 10.0
 
         super.init()
@@ -111,18 +116,21 @@ final class StreamChatVideoNode: ASDisplayNode {
 
     // MARK: - Interface
 
-    func activatePictureInPicture(_ completion: (() -> Void)? = nil) {
+    func activatePictureInPicture(smoothCorners: Bool = false, completion: (() -> Void)? = nil) {
         if let pictureInPictureController = pictureInPictureController {
             pictureInPictureController.startPictureInPicture()
+            applySmoothCornersToPictureInPicture(smoothCorners ? 12.0 : 0.0)
         }
         completion?()
     }
 
-    func deactivatePictureInPicture(_ completion: (() -> Void)? = nil) {
+    func deactivatePictureInPicture(smoothCorners: Bool = false, completion: (() -> Void)? = nil) {
         guard let pictureInPictureController = pictureInPictureController else { return }
 
         if pictureInPictureController.isPictureInPictureActive {
             requestedExpansion = true
+
+            applySmoothCornersToPictureInPicture(smoothCorners ? 12.0 : 0.0)
             pictureInPictureController.stopPictureInPicture()
         }
     }
@@ -274,6 +282,14 @@ final class StreamChatVideoNode: ASDisplayNode {
         })
     }
 
+    private func applySmoothCornersToPictureInPicture(_ cornerRadius: CGFloat) {
+        let windowName = ["PG", "Hosted", "Window"].joined()
+        guard let window = UIApplication.shared.windows.first(where: { type(of: $0) == NSClassFromString(windowName) }) else { return }
+
+        window.layer.masksToBounds = true
+        window.layer.cornerRadius = cornerRadius
+    }
+
     private func updateGloss(_ value: Bool) {
         if value {
             guard self.shimmerView == nil else { return }
@@ -353,7 +369,9 @@ extension StreamChatVideoNode: AVPictureInPictureControllerDelegate {
     func pictureInPictureControllerWillStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
         if requestedExpansion {
             requestedExpansion = false
-            layer.cornerRadius = 0.0
+
+            let cornerRadius: CGFloat = (requestSmoothCornersForPictureInPicture?() ?? false) ? 12.0 : 0.0
+            applySmoothCornersToPictureInPicture(cornerRadius)
         } else {
             requestClosePictureInPicture?()
         }
@@ -362,11 +380,6 @@ extension StreamChatVideoNode: AVPictureInPictureControllerDelegate {
     func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
         print("pip: did stop")
         requestedExpansion = false
-
-        if _cornerRadius > 0.0 {
-            let transition: ContainedViewLayoutTransition = .animated(duration: 0.2, curve: .slide)
-            transition.updateCornerRadius(layer: layer, cornerRadius: _cornerRadius)
-        }
     }
 
     func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
