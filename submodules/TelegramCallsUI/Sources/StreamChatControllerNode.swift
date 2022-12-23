@@ -395,6 +395,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
 
         containerLayoutUpdated(layout, transition: .immediate)
 
+        videoNode.deactivatePictureInPicture(smoothCorners: behavior is StreamChatControllerNodePreviewBehavior)
         behavior.animateIn()
     }
 
@@ -571,7 +572,7 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
             if inForeground, !self.isBeingDismissed {
                 Queue.mainQueue().after(0.5) { [weak self] in
                     guard let self = self else { return }
-                    self.videoNode.deactivatePictureInPicture()
+                    self.videoNode.deactivatePictureInPicture(smoothCorners: self.behavior is StreamChatControllerNodePreviewBehavior)
                 }
             }
         }
