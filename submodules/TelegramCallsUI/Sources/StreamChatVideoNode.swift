@@ -44,6 +44,8 @@ final class StreamChatVideoNode: ASDisplayNode {
     private var _aspectRatio: CGFloat = 16.0 / 9.0
     private var _cornerRadius: CGFloat = 12.0
 
+    private var isBackdropHidden: Bool = false
+
     private var pictureInPictureController: AVPictureInPictureController?
 
     // MARK: - Nodes
@@ -98,7 +100,7 @@ final class StreamChatVideoNode: ASDisplayNode {
 
         let isBackdropBlurredHidden: Bool = mode == .offline || isLandscape
         transition.updateAlpha(layer: backdropBlurredView.layer, alpha: isBackdropBlurredHidden ? 0.0 : 1.0)
-        backdropVideoView?.isHidden = isLandscape
+        backdropVideoView?.isHidden = isLandscape || isBackdropHidden
 
         transition.updateFrame(node: imageNode, frame: CGRect(origin: .zero, size: layout.size))
         transition.updateFrame(view: backdropBlurredView, frame: CGRect(origin: CGPoint(x: -32.0, y: -32.0), size: CGSize(width: layout.size.width + 64.0, height: layout.size.height + 64.0)))
@@ -205,7 +207,8 @@ final class StreamChatVideoNode: ASDisplayNode {
                 backdropVideoView.updateIsEnabled(true)
                 backdropVideoView.layer.cornerRadius = _cornerRadius
                 backdropVideoView.layer.masksToBounds = true
-                backdropVideoView.clipsToBounds = true
+                backdropVideoView.layer.borderColor = panelBackgroundColor.cgColor
+                backdropVideoView.layer.borderWidth = 1.0
                 self.backdropVideoView = backdropVideoView
                 view.insertSubview(backdropVideoView, belowSubview: backdropBlurredView)
             }
@@ -249,6 +252,22 @@ final class StreamChatVideoNode: ASDisplayNode {
             transition.updateCornerRadius(layer: shimmerView.layer, cornerRadius: cornerRadius)
             transition.updateCornerRadius(layer: borderMaskView.layer, cornerRadius: cornerRadius)
         }
+    }
+
+    func updateVideoAfterAnimatingIn() {
+        isBackdropHidden = false
+
+        backdropVideoView?.isHidden = isLandscape || isBackdropHidden
+
+        let backdropBlurredHidden = isLandscape || mode == .offline
+
+        let transition: ContainedViewLayoutTransition = .animated(duration: 0.2, curve: .slide)
+        backdropVideoView.flatMap { transition.updateAlpha(layer: $0.layer, alpha: 1.0) }
+        transition.updateAlpha(layer: backdropBlurredView.layer, alpha: backdropBlurredHidden ? 1.0 : 0.0)
+    }
+
+    func updateVideoAfterAnimatingOut() {
+        videoView?.isHidden = false
     }
 
     // MARK: - Private. Setup
@@ -430,6 +449,19 @@ final class StreamChatVideoNode: ASDisplayNode {
 
 extension StreamChatVideoNode: AVPictureInPictureControllerDelegate {
     // MARK: - Interface
+
+    func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        isBackdropHidden = true
+
+        let immediate: ContainedViewLayoutTransition = .immediate
+        backdropVideoView.flatMap { immediate.updateAlpha(layer: $0.layer, alpha: 0.0) }
+        immediate.updateAlpha(layer: backdropBlurredView.layer, alpha: 0.0)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let self = self else { return }
+            self.videoView?.isHidden = true
+        }
+    }
 
     func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
         print("pip: did start")

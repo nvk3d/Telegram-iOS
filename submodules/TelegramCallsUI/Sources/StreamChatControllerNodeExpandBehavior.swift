@@ -4,12 +4,16 @@ import Display
 final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBehavior {
     // MARK: - Properties
 
+    var requestDismiss: (() -> Void)?
     var requestStatusBarStyleUpdated: ((StatusBarStyle) -> Void)?
 
     private var layout: ContainerViewLayout?
 
     private var isLayoutUpdating: Bool = false
     private var videoAspectUpdate: ((ContainerViewLayout) -> Void)?
+
+    private var panGestureInProgress: Bool = false
+    private var videoNodeOffset: CGPoint = .zero
 
     private var isPanelsHidden: Bool = true
 
@@ -52,8 +56,13 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
 
     // MARK: - Init
 
-    init(nodes: StreamChatControllerNodeBehaviorNodes, requestStatusBarStyleUpdated: ((StatusBarStyle) -> Void)?) {
+    init(
+        nodes: StreamChatControllerNodeBehaviorNodes,
+        requestDismiss: (() -> Void)?,
+        requestStatusBarStyleUpdated: ((StatusBarStyle) -> Void)?
+    ) {
         self.nodes = nodes
+        self.requestDismiss = requestDismiss
         self.requestStatusBarStyleUpdated = requestStatusBarStyleUpdated
     }
 
@@ -123,7 +132,7 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
 
         let videoFrame = CGRect(
             x: (layout.size.width - videoSize.width) / 2.0,
-            y: (layout.size.height - videoSize.height) / 2.0,
+            y: (layout.size.height - videoSize.height) / 2.0 + videoNodeOffset.y,
             width: videoSize.width,
             height: videoSize.height
         )
@@ -238,7 +247,10 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
         }
 
         containerLayoutUpdated(layout, transition: transition)
-        dimNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
+        dimNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3) { [weak self] _ in
+            guard let self = self else { return }
+            self.videoNode.updateVideoAfterAnimatingIn()
+        }
     }
 
     func animateOut(_ completion: (() -> Void)?) {
@@ -249,19 +261,58 @@ final class StreamChatControllerNodeExpandBehavior: StreamChatControllerNodeBeha
         let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .easeInOut)
         setPanelsHidden(isPanelsHidden, transition: transition)
 
-        transition.updateAlpha(node: contentContainerNode, alpha: 0.0) { _ in
+        transition.updateAlpha(node: contentContainerNode, alpha: 0.0) { [weak self] _ in
+            guard let self = self else { return }
+
+            self.videoNodeOffset = .zero
+            self.layout.flatMap { self.containerLayoutUpdated($0, transition: .immediate) }
+            self.videoNode.updateVideoAfterAnimatingOut()
+
             completion?()
         }
     }
 
-    func tapGestureAction() {
+    func tapGestureAction(_ sender: UITapGestureRecognizer) {
         isPanelsHidden.toggle()
 
         let transition: ContainedViewLayoutTransition = .animated(duration: 0.3, curve: .slide)
         setPanelsHidden(isPanelsHidden, transition: transition)
     }
 
+    func panGestureAction(_ sender: UIPanGestureRecognizer) {
+        let translation = sender.translation(in: sender.view)
+        sender.setTranslation(.zero, in: sender.view)
+
+        videoNodeOffset.y += translation.y
+
+        switch sender.state {
+        case .began, .changed:
+            panGestureInProgress = true
+            layout.flatMap { containerLayoutUpdated($0, transition: .immediate) }
+
+        case .cancelled, .ended, .failed:
+            let velocity = sender.velocity(in: sender.view)
+            let progress = abs(videoNodeOffset.y / videoNode.frame.height)
+
+            if velocity.y > 300.0 || progress >= 0.5 {
+                videoNodeOffset = CGPoint(x: 0.0, y: videoNodeOffset.y < 0.0 ? -videoNode.frame.height : videoNode.frame.height)
+                requestDismiss?()
+            } else {
+                let duration = min(0.3, videoNodeOffset.y / max(1.0, velocity.y))
+                videoNodeOffset = .zero
+
+                let transition: ContainedViewLayoutTransition = .animated(duration: duration, curve: .easeInOut)
+                layout.flatMap { containerLayoutUpdated($0, transition: transition) }
+            }
+
+        default:
+            break
+        }
+    }
+
     func videoAspectUpdated() {
+        guard !panGestureInProgress else { return }
+
         if isLayoutUpdating {
             videoAspectUpdate = { [weak self] layout in
                 self?.containerLayoutUpdated(layout, transition: .animated(duration: 0.3, curve: .easeInOut))

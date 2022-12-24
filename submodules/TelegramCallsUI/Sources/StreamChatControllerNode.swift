@@ -55,7 +55,9 @@ struct StreamChatControllerNodeBehaviorNodes {
 protocol StreamChatControllerNodeBehavior: AnyObject {
     // MARK: - Nodes
 
+    var requestDismiss: (() -> Void)? { get set }
     var requestStatusBarStyleUpdated: ((StatusBarStyle) -> Void)? { get set }
+
     var nodes: StreamChatControllerNodeBehaviorNodes { get }
 
     // MARK: - Life cycle
@@ -67,7 +69,8 @@ protocol StreamChatControllerNodeBehavior: AnyObject {
 
     func animateIn()
     func animateOut(_ completion: (() -> Void)?)
-    func tapGestureAction()
+    func tapGestureAction(_ sender: UITapGestureRecognizer)
+    func panGestureAction(_ sender: UIPanGestureRecognizer)
     func videoAspectUpdated()
 }
 
@@ -159,26 +162,34 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
 
     // MARK: - Behavior
 
-    private lazy var behavior: StreamChatControllerNodeBehavior = StreamChatControllerNodePreviewBehavior(nodes: StreamChatControllerNodeBehaviorNodes(
-        dimNode: dimNode,
-        contentContainerNode: contentContainerNode,
-        topPanelNode: topPanelNode,
-        expandTopPanelNode: expandTopPanelNode,
-        optionsButton: optionsButton,
-        titleNode: titleNode,
-        pictureInPictureButton: pictureInPictureButton,
-        expandCloseButton: expandCloseButton,
-        expandTopTitleNode: expandTopTitleNode,
-        expandPictureInPictureButton: expandPictureInPictureButton,
-        videoNode: videoNode,
-        watchingNode: watchingNode,
-        bottomPanelNode: bottomPanelNode,
-        expandBottomPanelNode: expandBottomPanelNode,
-        expandShareButton: expandShareButton,
-        expandBottomTitleNode: expandBottomTitleNode,
-        expandBottomSubtitleNode: expandBottomSubtitleNode,
-        expandExpandButton: expandExpandButton
-    ), requestStatusBarStyleUpdated: { [weak self] statusBarStyle in self?.requestStatusBarStyleUpdated?(statusBarStyle) })
+    private lazy var behavior: StreamChatControllerNodeBehavior = StreamChatControllerNodePreviewBehavior(
+        nodes: StreamChatControllerNodeBehaviorNodes(
+            dimNode: dimNode,
+            contentContainerNode: contentContainerNode,
+            topPanelNode: topPanelNode,
+            expandTopPanelNode: expandTopPanelNode,
+            optionsButton: optionsButton,
+            titleNode: titleNode,
+            pictureInPictureButton: pictureInPictureButton,
+            expandCloseButton: expandCloseButton,
+            expandTopTitleNode: expandTopTitleNode,
+            expandPictureInPictureButton: expandPictureInPictureButton,
+            videoNode: videoNode,
+            watchingNode: watchingNode,
+            bottomPanelNode: bottomPanelNode,
+            expandBottomPanelNode: expandBottomPanelNode,
+            expandShareButton: expandShareButton,
+            expandBottomTitleNode: expandBottomTitleNode,
+            expandBottomSubtitleNode: expandBottomSubtitleNode,
+            expandExpandButton: expandExpandButton
+        ),
+        requestDismiss: { [weak self] in self?.dismissToPictureInPicture() },
+        requestStatusBarStyleUpdated: { [weak self] statusBarStyle in self?.requestStatusBarStyleUpdated?(statusBarStyle) }
+    )
+
+    // MARK: - Gestures
+
+    private var panGestureRecognizer: UIPanGestureRecognizer?
 
     // MARK: - Nodes
 
@@ -331,11 +342,12 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         contentTapGesture.delegate = self
         contentContainerNode.view.addGestureRecognizer(contentTapGesture)
 
-//        let panRecognizer = DirectionalPanGestureRecognizer(target: self, action: #selector(panGesture(_:)))
-//        panRecognizer.delegate = self
-//        panRecognizer.delaysTouchesBegan = false
-//        panRecognizer.cancelsTouchesInView = true
-//        view.addGestureRecognizer(panRecognizer)
+        let panRecognizer = DirectionalPanGestureRecognizer(target: self, action: #selector(panGesture(_:)))
+        panRecognizer.delegate = self
+        panRecognizer.delaysTouchesBegan = false
+        panRecognizer.cancelsTouchesInView = true
+        view.addGestureRecognizer(panRecognizer)
+        panGestureRecognizer = panRecognizer
 
         watchingNode.setTitle("0", transition: .immediate)
         watchingNode.setSubtitle("watching", transition: .immediate)
@@ -352,12 +364,12 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         switch layout.orientation {
         case .portrait:
             guard behavior is StreamChatControllerNodeExpandBehavior else { break }
-            behavior = StreamChatControllerNodePreviewBehavior(nodes: behavior.nodes, requestStatusBarStyleUpdated: behavior.requestStatusBarStyleUpdated)
+            behavior = StreamChatControllerNodePreviewBehavior(nodes: behavior.nodes, requestDismiss: behavior.requestDismiss, requestStatusBarStyleUpdated: behavior.requestStatusBarStyleUpdated)
             behavior.didLoad(animated: prevLayout != nil)
 
         case .landscape:
             guard behavior is StreamChatControllerNodePreviewBehavior else { break }
-            behavior = StreamChatControllerNodeExpandBehavior(nodes: behavior.nodes, requestStatusBarStyleUpdated: behavior.requestStatusBarStyleUpdated)
+            behavior = StreamChatControllerNodeExpandBehavior(nodes: behavior.nodes, requestDismiss: behavior.requestDismiss, requestStatusBarStyleUpdated: behavior.requestStatusBarStyleUpdated)
             behavior.didLoad(animated: prevLayout != nil)
         }
 
@@ -369,6 +381,11 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if let contentTapGesture = gestureRecognizer as? UITapGestureRecognizer, contentTapGesture.view === contentContainerNode.view {
             return behavior is StreamChatControllerNodeExpandBehavior
+        }
+        if let panGesture = gestureRecognizer as? UIPanGestureRecognizer {
+            let location = panGesture.location(in: view)
+            let converted = view.convert(location, to: contentContainerNode.view)
+            return contentContainerNode.view.bounds.contains(converted)
         }
         return true
     }
@@ -583,21 +600,18 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
     @objc
     private func dimTapGesture(_ recognizer: UITapGestureRecognizer) {
         guard case .ended = recognizer.state else { return }
-
-        videoNode.activatePictureInPicture { [weak self] in
-            self?.controller?.dismiss(closing: false, manual: true)
-        }
+        dismissToPictureInPicture()
     }
 
     @objc
     private func contentTapGesture(_ recognizer: UITapGestureRecognizer) {
         guard case .ended = recognizer.state else { return }
-        behavior.tapGestureAction()
+        behavior.tapGestureAction(recognizer)
     }
 
     @objc
     private func panGesture(_ recognizer: UIPanGestureRecognizer) {
-
+        behavior.panGestureAction(recognizer)
     }
 
     @objc
@@ -689,5 +703,13 @@ final class StreamChatControllerNode: ViewControllerTracingNode, UIGestureRecogn
         }
 
         videoNode.videoUpdated(signal, transition: .immediate)
+    }
+
+    // MARK: - Private. Help
+
+    private func dismissToPictureInPicture() {
+        videoNode.activatePictureInPicture { [weak self] in
+            self?.controller?.dismiss(closing: false, manual: true)
+        }
     }
 }
