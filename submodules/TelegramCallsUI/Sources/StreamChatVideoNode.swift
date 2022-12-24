@@ -137,8 +137,13 @@ final class StreamChatVideoNode: ASDisplayNode {
                     duration: duration - 0.05
                 )
             } else {
-                transition.updateFrame(view: backdropVideoView, frame: CGRect(origin: .zero, size: layout.size))
-                transition.updateFrame(view: videoView, frame: CGRect(origin: .zero, size: layout.size))
+                displayLinkAnimator?.invalidate()
+                displayLinkAnimator = nil
+
+                let nextVideoFrame = CGRect(origin: .zero, size: layout.size)
+
+                transition.updateFrame(view: backdropVideoView, frame: nextVideoFrame)
+                transition.updateFrame(view: videoView, frame: nextVideoFrame)
             }
         }
     }
