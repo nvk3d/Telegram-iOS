@@ -15,7 +15,8 @@ private func fetchRawData(prefix: String) -> Signal<Data, FetchError> {
         #if targetEnvironment(simulator)
         return EmptyDisposable
         #else
-        let container = CKContainer.default()
+        return EmptyDisposable
+        /*let container = CKContainer.default()
         let publicDatabase = container.database(with: .public)
         let recordId = CKRecord.ID(recordName: "emergency-datacenter-\(prefix)")
         publicDatabase.fetch(withRecordID: recordId, completionHandler: { record, error in
@@ -46,7 +47,7 @@ private func fetchRawData(prefix: String) -> Signal<Data, FetchError> {
         })
         
         return ActionDisposable {
-        }
+        }*/
         #endif
     }
 }
