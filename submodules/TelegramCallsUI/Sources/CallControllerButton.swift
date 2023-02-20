@@ -260,11 +260,11 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
                 case .cameraOff, .cameraOn:
                     image = nil
                 case .camera:
-                    image = generateTintedImage(image: UIImage(bundleImageName: "Call/CallCameraButton"), color: imageColor)
+                    image = generateTintedImage(image: UIImage(bundleImageName: "Call/CallCameraButton1"), color: imageColor)
                 case .mute:
                     image = generateTintedImage(image: UIImage(bundleImageName: "Call/CallMuteButton"), color: imageColor)
                 case .flipCamera:
-                    image = generateTintedImage(image: UIImage(bundleImageName: "Call/CallSwitchCameraButton"), color: imageColor)
+                    image = generateTintedImage(image: UIImage(bundleImageName: "Call/CallSwitchCameraButton1"), color: imageColor)
                 case .bluetooth:
                     image = generateTintedImage(image: UIImage(bundleImageName: "Call/CallBluetoothButton"), color: imageColor)
                 case .speaker:
