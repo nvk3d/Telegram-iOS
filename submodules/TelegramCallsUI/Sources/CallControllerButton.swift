@@ -61,9 +61,16 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
             self.hasProgress = hasProgress
         }
     }
+
+    enum MaskAnimation {
+        case animateIn
+        case animateOut
+    }
     
     private let wrapperNode: ASDisplayNode
     private let contentContainer: ASDisplayNode
+    private let contentMaskLayer: CAShapeLayer
+    private let contentPlaceholderMaskLayer: CAShapeLayer
     private let effectView: UIVisualEffectView
     private let contentBackgroundNode: ASImageNode
     private let contentNode: ASImageNode
@@ -83,6 +90,9 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
         
         self.wrapperNode = ASDisplayNode()
         self.contentContainer = ASDisplayNode()
+
+        self.contentMaskLayer = CAShapeLayer()
+        self.contentPlaceholderMaskLayer = CAShapeLayer()
         
         self.effectView = UIVisualEffectView()
         self.effectView.effect = UIBlurEffect(style: .light)
@@ -109,6 +119,9 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
         self.addSubnode(self.wrapperNode)
         self.wrapperNode.addSubnode(self.contentContainer)
         self.contentContainer.frame = CGRect(origin: CGPoint(), size: CGSize(width: self.largeButtonSize, height: self.largeButtonSize))
+
+        self.contentMaskLayer.frame = CGRect(origin: .zero, size: CGSize(width: self.largeButtonSize, height: self.largeButtonSize))
+        self.contentPlaceholderMaskLayer.frame = CGRect(origin: .zero, size: CGSize(width: self.largeButtonSize, height: self.largeButtonSize))
         
         self.wrapperNode.addSubnode(self.textNode)
         
@@ -344,9 +357,17 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
                 }
                 self.contentNode.image = contentImage
                 self.contentNode.layer.animateRotation(from: -rotation, to: 0.0, duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring)
-            } else if transition.isAnimated, let contentImage = contentImage, let previousContent = self.contentNode.image {
+            } else if transition.isAnimated, let contentImage = contentImage, self.contentNode.image != nil {
+                if let snapshotView = self.contentNode.view.snapshotContentTree() {
+                    snapshotView.frame = self.contentNode.view.frame
+                    self.contentContainer.view.addSubview(snapshotView)
+
+                    _animateMask(in: snapshotView, maskLayer: contentPlaceholderMaskLayer, animation: .animateOut, transition: transition) { [weak snapshotView] in
+                        snapshotView?.removeFromSuperview()
+                    }
+                }
                 self.contentNode.image = contentImage
-                self.contentNode.layer.animate(from: previousContent.cgImage!, to: contentImage.cgImage!, keyPath: "contents", timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, duration: 0.2)
+                _animateMask(in: contentNode.view, maskLayer: contentMaskLayer, animation: .animateIn, transition: transition)
             } else {
                 self.contentNode.image = contentImage
             }
@@ -399,5 +420,53 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
             transition.updateFrameAdditiveToCenter(node: self.textNode, frame: textFrame)
         }
         self.currentText = text
+    }
+
+    func animateMask(_ animation: MaskAnimation, transition: ContainedViewLayoutTransition, completion: (() -> Void)? = nil) {
+        switch animation {
+        case .animateIn:
+            textNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+        case .animateOut:
+            transition.updateAlpha(node: textNode, alpha: 0.0)
+        }
+        _animateMask(in: contentContainer.view, maskLayer: contentMaskLayer, animation: animation, transition: transition, completion: completion)
+    }
+
+    // MARK: - Private. Help
+
+    private func _animateMask(in view: UIView, maskLayer: CAShapeLayer, animation: MaskAnimation, transition: ContainedViewLayoutTransition, completion: (() -> Void)? = nil) {
+        let beginPath: UIBezierPath
+        let path: UIBezierPath
+
+        let zeroSize = CGSize(width: 0.01, height: 0.01)
+        let buttonSize = CGSize(width: largeButtonSize, height: largeButtonSize)
+
+        switch animation {
+        case .animateIn:
+            beginPath = UIBezierPath(rect: CGRect(origin: .zero, size: buttonSize))
+            beginPath.append(UIBezierPath(
+                roundedRect: CGRect(origin: CGPoint(x: (largeButtonSize - buttonSize.width) / 2.0, y: (largeButtonSize - buttonSize.height) / 2.0), size: buttonSize),
+                cornerRadius: buttonSize.height / 2.0
+            ))
+
+            path = UIBezierPath(rect: CGRect(origin: .zero, size: buttonSize))
+            path.append(UIBezierPath(
+                roundedRect: CGRect(origin: CGPoint(x: (largeButtonSize - zeroSize.width) / 2.0, y: (largeButtonSize - zeroSize.height) / 2.0), size: zeroSize),
+                cornerRadius: zeroSize.height / 2.0
+            ))
+
+        case .animateOut:
+            beginPath = UIBezierPath(roundedRect: CGRect(origin: CGPoint(x: (largeButtonSize - buttonSize.width) / 2.0, y: (largeButtonSize - buttonSize.height) / 2.0), size: buttonSize), cornerRadius: buttonSize.height / 2.0)
+            path = UIBezierPath(roundedRect: CGRect(origin: CGPoint(x: (largeButtonSize - zeroSize.width) / 2.0, y: (largeButtonSize - zeroSize.height) / 2.0), size: zeroSize), cornerRadius: zeroSize.height / 2.0)
+        }
+
+        maskLayer.fillRule = animation == .animateIn ? .evenOdd : .nonZero
+        maskLayer.path = beginPath.cgPath
+        view.layer.mask = maskLayer
+
+        transition.updatePath(layer: maskLayer, path: path.cgPath) { [weak view] _ in
+            view?.layer.mask = nil
+            completion?()
+        }
     }
 }

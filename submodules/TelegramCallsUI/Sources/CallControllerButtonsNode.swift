@@ -569,7 +569,7 @@ final class CallControllerButtonsNode: ASDisplayNode {
             buttonNode.accessibilityTraits = buttonAccessibilityTraits
             
             if animateButtonIn {
-                buttonNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                buttonNode.animateMask(.animateIn, transition: transition)
             }
         }
         
@@ -584,9 +584,9 @@ final class CallControllerButtonsNode: ASDisplayNode {
                             button?.removeFromSupernode()
                         })
                     } else {
-                        transition.updateAlpha(node: button, alpha: 0.0, completion: { [weak button] _ in
+                        button.animateMask(.animateOut, transition: transition) { [weak button] in
                             button?.removeFromSupernode()
-                        })
+                        }
                     }
                 } else {
                     button.removeFromSupernode()
