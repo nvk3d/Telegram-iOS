@@ -57,6 +57,7 @@ public final class CallController: ViewController {
     
     private var presentationData: PresentationData
     private var didPlayPresentationAnimation = false
+    private var endCallRequested: Bool = false
     
     private var peer: Peer?
     
@@ -224,10 +225,12 @@ public final class CallController: ViewController {
         }
         
         self.controllerNode.endCall = { [weak self] in
+            self?.endCallRequested = true
             let _ = self?.call.hangUp()
         }
         
         self.controllerNode.back = { [weak self] in
+            self?.endCallRequested = false
             let _ = self?.dismiss()
         }
         
@@ -346,6 +349,7 @@ public final class CallController: ViewController {
     }
     
     override public func dismiss(completion: (() -> Void)? = nil) {
+        guard !endCallRequested else { return }
         self.controllerNode.animateOut(completion: { [weak self] in
             self?.didPlayPresentationAnimation = false
             self?.presentingViewController?.dismiss(animated: false, completion: nil)

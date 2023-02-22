@@ -370,6 +370,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private let containerNode: ASDisplayNode
     private let videoContainerNode: PinchSourceContainerNode
 
+    private let audioNode: CallControllerAudioNode
     private let imageNode: TransformImageNode
     private let statusNode: CallControllerStatusNode
     
@@ -481,7 +482,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.containerNode = ASDisplayNode()
         
         self.videoContainerNode = PinchSourceContainerNode()
-        
+
+        self.audioNode = CallControllerAudioNode()
+
         self.imageNode = TransformImageNode()
         self.imageNode.contentAnimations = [.subsequentUpdates]
         self.imageNode.clipsToBounds = true
@@ -526,6 +529,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             }
         }
 
+        self.containerNode.addSubnode(self.audioNode)
         self.containerNode.addSubnode(self.imageNode)
         self.containerNode.addSubnode(self.videoContainerNode)
         self.containerNode.addSubnode(self.statusNode)
@@ -534,6 +538,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.containerNode.addSubnode(self.keyButtonNode)
         self.containerNode.addSubnode(self.backButtonArrowNode)
         self.containerNode.addSubnode(self.backButtonNode)
+
+        self.audioNode.setSignal(call.audioLevel)
         
         self.buttonsNode.mute = { [weak self] in
             self?.toggleMute?()
@@ -1147,6 +1153,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.updateToastContent()
         self.updateButtonsMode()
         self.updateDimVisibility()
+        self.updateAudioAndImageState()
         
         if self.incomingVideoViewRequested || self.outgoingVideoViewRequested {
             if self.incomingVideoViewRequested && self.outgoingVideoViewRequested {
@@ -1216,6 +1223,22 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         }
 
         self.statusNode.setVisible(visible || self.keyPreviewNode != nil, transition: transition)
+    }
+
+    private func updateAudioAndImageState() {
+        guard let callState = callState else { return }
+
+        switch callState.state {
+        case .active:
+            break
+
+        case .terminating, .terminated:
+            audioNode.animateOut()
+
+        default:
+            audioNode.updateLevel(0.65)
+            audioNode.startAnimating()
+        }
     }
     
     private func maybeScheduleUIHidingForActiveVideoCall() {
@@ -1577,6 +1600,11 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let arguments = TransformImageArguments(corners: ImageCorners(), imageSize: imageSizeCeiled, boundingSize: imageSizeCeiled, intrinsicInsets: UIEdgeInsets())
         let apply = self.imageNode.asyncLayout()(arguments)
         apply()
+
+        let audioSize = CGSize(width: layout.size.width, height: layout.size.width)
+        let audioFrame = CGRect(origin: CGPoint(x: imageFrame.midX - audioSize.width / 2.0, y: imageFrame.midY - audioSize.height / 2.0), size: audioSize)
+        transition.updateFrame(node: audioNode, frame: audioFrame)
+        audioNode.updateLayout(audioFrame.size, transition: transition)
 
         transition.updateFrame(node: self.statusNode, frame: CGRect(origin: CGPoint(x: 0.0, y: imageFrame.maxY + statusOffset), size: CGSize(width: layout.size.width, height: statusHeight)))
         transition.updateAlpha(node: self.statusNode, alpha: overlayAlpha)
