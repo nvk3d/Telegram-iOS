@@ -369,9 +369,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private let containerTransformationNode: ASDisplayNode
     private let containerNode: ASDisplayNode
     private let videoContainerNode: PinchSourceContainerNode
-    
+
     private let imageNode: TransformImageNode
-    private let dimNode: ASImageNode
+    private let statusNode: CallControllerStatusNode
     
     private var candidateIncomingVideoNodeValue: CallVideoNode?
     private var incomingVideoNodeValue: CallVideoNode?
@@ -400,7 +400,6 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private var outgoingVideoNodeCorner: VideoNodeCorner = .bottomRight
     private let backButtonArrowNode: ASImageNode
     private let backButtonNode: HighlightableButtonNode
-    private let statusNode: CallControllerStatusNode
     private let toastNode: CallControllerToastContainerNode
     private let buttonsNode: CallControllerButtonsNode
     private var keyPreviewNode: CallControllerKeyPreviewNode?
@@ -485,18 +484,15 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         self.imageNode = TransformImageNode()
         self.imageNode.contentAnimations = [.subsequentUpdates]
-        self.dimNode = ASImageNode()
-        self.dimNode.contentMode = .scaleToFill
-        self.dimNode.isUserInteractionEnabled = false
-        self.dimNode.backgroundColor = UIColor(white: 0.0, alpha: 0.3)
+        self.imageNode.clipsToBounds = true
+
+        self.statusNode = CallControllerStatusNode()
         
         self.backButtonArrowNode = ASImageNode()
         self.backButtonArrowNode.displayWithoutProcessing = true
         self.backButtonArrowNode.displaysAsynchronously = false
         self.backButtonArrowNode.image = NavigationBarTheme.generateBackArrowImage(color: .white)
         self.backButtonNode = HighlightableButtonNode()
-        
-        self.statusNode = CallControllerStatusNode()
         
         self.buttonsNode = CallControllerButtonsNode(strings: self.presentationData.strings)
         self.toastNode = CallControllerToastContainerNode(strings: self.presentationData.strings)
@@ -529,10 +525,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 }
             }
         }
-        
+
         self.containerNode.addSubnode(self.imageNode)
         self.containerNode.addSubnode(self.videoContainerNode)
-        self.containerNode.addSubnode(self.dimNode)
         self.containerNode.addSubnode(self.statusNode)
         self.containerNode.addSubnode(self.buttonsNode)
         self.containerNode.addSubnode(self.toastNode)
@@ -791,10 +786,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             if let peerReference = PeerReference(peer), !peer.profileImageRepresentations.isEmpty {
                 let representations: [ImageRepresentationWithReference] = peer.profileImageRepresentations.map({ ImageRepresentationWithReference(representation: $0, reference: .avatar(peer: peerReference, resource: $0.resource)) })
                 self.imageNode.setSignal(chatAvatarGalleryPhoto(account: self.account, representations: representations, immediateThumbnailData: nil, autoFetchFullSize: true))
-                self.dimNode.isHidden = false
             } else {
                 self.imageNode.setSignal(callDefaultBackground())
-                self.dimNode.isHidden = true
             }
             
             self.toastNode.title = EnginePeer(peer).compactDisplayTitle
@@ -1221,21 +1214,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         if case .active = callState.state, self.incomingVideoNodeValue != nil || self.outgoingVideoNodeValue != nil {
             visible = false
         }
-        
-        let currentVisible = self.dimNode.image == nil
-        if visible != currentVisible {
-            let color = visible ? UIColor(rgb: 0x000000, alpha: 0.3) : UIColor.clear
-            let image: UIImage? = visible ? nil : generateGradientImage(size: CGSize(width: 1.0, height: 640.0), colors: [UIColor.black.withAlphaComponent(0.3), UIColor.clear, UIColor.clear, UIColor.black.withAlphaComponent(0.3)], locations: [0.0, 0.22, 0.7, 1.0])
-            if case let .animated(duration, _) = transition {
-                UIView.transition(with: self.dimNode.view, duration: duration, options: .transitionCrossDissolve, animations: {
-                    self.dimNode.backgroundColor = color
-                    self.dimNode.image = image
-                }, completion: nil)
-            } else {
-                self.dimNode.backgroundColor = color
-                self.dimNode.image = image
-            }
-        }
+
         self.statusNode.setVisible(visible || self.keyPreviewNode != nil, transition: transition)
     }
     
@@ -1565,18 +1544,10 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         transition.updateFrame(node: self.videoContainerNode, frame: containerFullScreenFrame)
         self.videoContainerNode.update(size: containerFullScreenFrame.size, transition: transition)
         
-        transition.updateAlpha(node: self.dimNode, alpha: pinchTransitionAlpha)
-        transition.updateFrame(node: self.dimNode, frame: containerFullScreenFrame)
-        
         if let keyPreviewNode = self.keyPreviewNode {
             transition.updateFrame(node: keyPreviewNode, frame: containerFullScreenFrame)
             keyPreviewNode.updateLayout(size: layout.size, transition: .immediate)
         }
-        
-        transition.updateFrame(node: self.imageNode, frame: containerFullScreenFrame)
-        let arguments = TransformImageArguments(corners: ImageCorners(), imageSize: CGSize(width: 640.0, height: 640.0).aspectFilled(layout.size), boundingSize: layout.size, intrinsicInsets: UIEdgeInsets())
-        let apply = self.imageNode.asyncLayout()(arguments)
-        apply()
         
         let navigationOffset: CGFloat = max(20.0, layout.safeInsets.top)
         let topOriginY = interpolate(from: -20.0, to: navigationOffset, value: uiDisplayTransition)
@@ -1590,28 +1561,24 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         transition.updateAlpha(node: self.backButtonArrowNode, alpha: overlayAlpha)
         transition.updateAlpha(node: self.backButtonNode, alpha: overlayAlpha)
         transition.updateAlpha(node: self.toastNode, alpha: toastAlpha)
-        
-        var statusOffset: CGFloat
-        if layout.metrics.widthClass == .regular && layout.metrics.heightClass == .regular {
-            if layout.size.height.isEqual(to: 1366.0) {
-                statusOffset = 160.0
-            } else {
-                statusOffset = 120.0
-            }
-        } else {
-            if layout.size.height.isEqual(to: 736.0) {
-                statusOffset = 80.0
-            } else if layout.size.width.isEqual(to: 320.0) {
-                statusOffset = 60.0
-            } else {
-                statusOffset = 64.0
-            }
-        }
-        
-        statusOffset += layout.safeInsets.top
-        
+
+        let imageSide = layout.size.width / 3.0
+        let imageSize = CGSize(width: imageSide, height: imageSide)
+
+        let statusOffset: CGFloat = 20.0
         let statusHeight = self.statusNode.updateLayout(constrainedWidth: layout.size.width, transition: transition)
-        transition.updateFrame(node: self.statusNode, frame: CGRect(origin: CGPoint(x: 0.0, y: statusOffset), size: CGSize(width: layout.size.width, height: statusHeight)))
+
+        let imageStatusOffset: CGFloat = 10.0
+        let imageStatusHeight: CGFloat = imageSize.height + statusOffset + statusHeight
+        let imageFrame = CGRect(origin: CGPoint(x: (layout.size.width - imageSize.width) / 2.0, y: max(topOriginY, ((layout.size.height - buttonsHeight) - imageStatusHeight) / 2.0 - imageStatusOffset)), size: imageSize)
+        transition.updateFrame(node: self.imageNode, frame: imageFrame)
+        transition.updateCornerRadius(node: self.imageNode, cornerRadius: imageSide / 2.0)
+        let imageSizeCeiled = CGSize(width: ceil(imageSize.width), height: ceil(imageSize.height))
+        let arguments = TransformImageArguments(corners: ImageCorners(), imageSize: imageSizeCeiled, boundingSize: imageSizeCeiled, intrinsicInsets: UIEdgeInsets())
+        let apply = self.imageNode.asyncLayout()(arguments)
+        apply()
+
+        transition.updateFrame(node: self.statusNode, frame: CGRect(origin: CGPoint(x: 0.0, y: imageFrame.maxY + statusOffset), size: CGSize(width: layout.size.width, height: statusHeight)))
         transition.updateAlpha(node: self.statusNode, alpha: overlayAlpha)
         
         transition.updateFrame(node: self.toastNode, frame: CGRect(origin: CGPoint(x: 0.0, y: toastOriginY), size: CGSize(width: layout.size.width, height: toastHeight)))

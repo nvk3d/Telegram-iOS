@@ -4,11 +4,11 @@ import Display
 import AsyncDisplayKit
 import SwiftSignalKit
 
-private let compactNameFont = Font.regular(28.0)
-private let regularNameFont = Font.regular(36.0)
+private let compactNameFont = Font.regular(22.0)
+private let regularNameFont = Font.regular(28.0)
 
-private let compactStatusFont = Font.regular(18.0)
-private let regularStatusFont = Font.regular(18.0)
+private let compactStatusFont = Font.regular(16.0)
+private let regularStatusFont = Font.regular(16.0)
 
 enum CallControllerStatusValue: Equatable {
     case text(string: String, displayLogo: Bool)
@@ -209,7 +209,7 @@ final class CallControllerStatusNode: ASDisplayNode {
         self.titleNode.frame = CGRect(origin: CGPoint(x: floor((constrainedWidth - titleLayout.size.width) / 2.0), y: 0.0), size: titleLayout.size)
         self.statusContainerNode.frame = CGRect(origin: CGPoint(x: 0.0, y: titleLayout.size.height + spacing), size: CGSize(width: constrainedWidth, height: statusLayout.size.height))
         self.statusNode.frame = CGRect(origin: CGPoint(x: floor((constrainedWidth - statusMeasureLayout.size.width) / 2.0) + statusOffset, y: 0.0), size: statusLayout.size)
-        self.receptionNode.frame = CGRect(origin: CGPoint(x: self.statusNode.frame.minX - receptionNodeSize.width, y: 9.0), size: receptionNodeSize)
+        self.receptionNode.frame = CGRect(origin: CGPoint(x: self.statusNode.frame.minX - receptionNodeSize.width + 4.0, y: (statusContainerNode.frame.height - receptionNodeSize.height) / 2.0), size: receptionNodeSize)
         self.logoNode.isHidden = !statusDisplayLogo
         if let image = self.logoNode.image, let firstLineRect = statusMeasureLayout.linesRects().first {
             let firstLineOffset = floor((statusMeasureLayout.size.width - firstLineRect.width) / 2.0)
