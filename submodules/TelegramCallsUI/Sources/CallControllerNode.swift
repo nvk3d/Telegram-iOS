@@ -838,7 +838,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     
     func updateCallState(_ callState: PresentationCallState) {
         self.callState = callState
-        
+
+        var statusTitle: String?
         let statusValue: CallControllerStatusValue
         var statusReception: Int32?
         
@@ -1039,96 +1040,103 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 incomingVideoNode.updateIsBlurred(isBlurred: !isActive)
             }
         }
+
+        let generateDeclineButtonImage: () -> UIImage? = { generateTintedImage(image: UIImage(bundleImageName: "Call/CallDeclineButtonSmall"), color: .white) }
                 
         switch callState.state {
-            case .waiting, .connecting:
-                statusValue = .text(string: self.presentationData.strings.Call_StatusConnecting, displayLogo: false)
-            case let .requesting(ringing):
-                if ringing {
-                    statusValue = .text(string: self.presentationData.strings.Call_StatusRinging, displayLogo: false)
-                } else {
-                    statusValue = .text(string: self.presentationData.strings.Call_StatusRequesting, displayLogo: false)
-                }
-            case .terminating:
-                statusValue = .text(string: self.presentationData.strings.Call_StatusEnded, displayLogo: false)
-            case let .terminated(_, reason, _):
-                if let reason = reason {
-                    switch reason {
-                        case let .ended(type):
-                            switch type {
-                                case .busy:
-                                    statusValue = .text(string: self.presentationData.strings.Call_StatusBusy, displayLogo: false)
-                                case .hungUp, .missed:
-                                    statusValue = .text(string: self.presentationData.strings.Call_StatusEnded, displayLogo: false)
-                            }
-                        case let .error(error):
-                            let text = self.presentationData.strings.Call_StatusFailed
-                            switch error {
-                            case let .notSupportedByPeer(isVideo):
-                                if !self.displayedVersionOutdatedAlert, let peer = self.peer {
-                                    self.displayedVersionOutdatedAlert = true
-                                    
-                                    let text: String
-                                    if isVideo {
-                                        text = self.presentationData.strings.Call_ParticipantVideoVersionOutdatedError(EnginePeer(peer).displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)).string
-                                    } else {
-                                        text = self.presentationData.strings.Call_ParticipantVersionOutdatedError(EnginePeer(peer).displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)).string
-                                    }
-                                    
-                                    self.present?(textAlertController(sharedContext: self.sharedContext, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {
-                                    })]))
-                                }
-                            default:
-                                break
-                            }
-                            statusValue = .text(string: text, displayLogo: false)
+        case .waiting, .connecting:
+            statusValue = .text(string: self.presentationData.strings.Call_StatusConnecting, loading: true)
+        case let .requesting(ringing):
+            if ringing {
+                statusValue = .text(string: self.presentationData.strings.Call_StatusRinging, loading: true)
+            } else {
+                statusValue = .text(string: self.presentationData.strings.Call_StatusRequesting, loading: true)
+            }
+        case .terminating:
+            statusTitle = self.presentationData.strings.Call_StatusEnded
+            statusValue = .timestamp(icon: generateDeclineButtonImage())
+        case let .terminated(_, reason, _):
+            if let reason = reason {
+                switch reason {
+                case let .ended(type):
+                    switch type {
+                    case .busy:
+                        statusTitle = self.presentationData.strings.Call_StatusBusy
+                        statusValue = .timestamp(icon: generateDeclineButtonImage())
+                    case .hungUp, .missed:
+                        statusTitle = self.presentationData.strings.Call_StatusEnded
+                        statusValue = .timestamp(icon: generateDeclineButtonImage())
                     }
-                } else {
-                    statusValue = .text(string: self.presentationData.strings.Call_StatusEnded, displayLogo: false)
-                }
-            case .ringing:
-                var text: String
-                if self.call.isVideo {
-                    text = self.presentationData.strings.Call_IncomingVideoCall
-                } else {
-                    text = self.presentationData.strings.Call_IncomingVoiceCall
-                }
-                if !self.statusNode.subtitle.isEmpty {
-                    text += "\n\(self.statusNode.subtitle)"
-                }
-                statusValue = .text(string: text, displayLogo: false)
-            case .active(let timestamp, let reception, let keyVisualHash), .reconnecting(let timestamp, let reception, let keyVisualHash):
-                let strings = self.presentationData.strings
-                var isReconnecting = false
-                if case .reconnecting = callState.state {
-                    isReconnecting = true
-                }
-                if self.keyTextData?.0 != keyVisualHash {
-                    let text = stringForEmojiHashOfData(keyVisualHash, 4)!
-                    self.keyTextData = (keyVisualHash, text)
+                case let .error(error):
+                    let text = self.presentationData.strings.Call_StatusFailed
+                    switch error {
+                    case let .notSupportedByPeer(isVideo):
+                        if !self.displayedVersionOutdatedAlert, let peer = self.peer {
+                            self.displayedVersionOutdatedAlert = true
 
-                    self.keyButtonNode.key = text
-                    
-                    let keyTextSize = self.keyButtonNode.measure(CGSize(width: 200.0, height: 200.0))
-                    self.keyButtonNode.frame = CGRect(origin: self.keyButtonNode.frame.origin, size: keyTextSize)
-                    
-                    self.keyButtonNode.animateIn()
-                    
-                    if let (layout, navigationBarHeight) = self.validLayout {
-                        self.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .immediate)
+                            let text: String
+                            if isVideo {
+                                text = self.presentationData.strings.Call_ParticipantVideoVersionOutdatedError(EnginePeer(peer).displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)).string
+                            } else {
+                                text = self.presentationData.strings.Call_ParticipantVersionOutdatedError(EnginePeer(peer).displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder)).string
+                            }
+
+                            self.present?(textAlertController(sharedContext: self.sharedContext, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {
+                            })]))
+                        }
+                    default:
+                        break
                     }
+                    statusTitle = text
+                    statusValue = .timestamp(icon: generateDeclineButtonImage())
                 }
-                
-                statusValue = .timer({ value, measure in
-                    if isReconnecting || (self.outgoingVideoViewRequested && value == "00:00" && !measure) {
-                        return strings.Call_StatusConnecting
-                    } else {
-                        return value
-                    }
-                }, timestamp)
-                if case .active = callState.state {
-                    statusReception = reception
+            } else {
+                statusTitle = self.presentationData.strings.Call_StatusEnded
+                statusValue = .timestamp(icon: generateDeclineButtonImage())
+            }
+        case .ringing:
+            var text: String
+            if self.call.isVideo {
+                text = self.presentationData.strings.Call_IncomingVideoCall
+            } else {
+                text = self.presentationData.strings.Call_IncomingVoiceCall
+            }
+            if !self.statusNode.subtitle.isEmpty {
+                text += "\n\(self.statusNode.subtitle)"
+            }
+            statusValue = .text(string: text, loading: true)
+        case .active(let timestamp, let reception, let keyVisualHash), .reconnecting(let timestamp, let reception, let keyVisualHash):
+            let strings = self.presentationData.strings
+            var isReconnecting = false
+            if case .reconnecting = callState.state {
+                isReconnecting = true
+            }
+            if self.keyTextData?.0 != keyVisualHash {
+                let text = stringForEmojiHashOfData(keyVisualHash, 4)!
+                self.keyTextData = (keyVisualHash, text)
+
+                self.keyButtonNode.key = text
+
+                let keyTextSize = self.keyButtonNode.measure(CGSize(width: 200.0, height: 200.0))
+                self.keyButtonNode.frame = CGRect(origin: self.keyButtonNode.frame.origin, size: keyTextSize)
+
+                self.keyButtonNode.animateIn()
+
+                if let (layout, navigationBarHeight) = self.validLayout {
+                    self.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .immediate)
                 }
+            }
+
+            statusValue = .timer({ value, measure in
+                if isReconnecting || (self.outgoingVideoViewRequested && value == "00:00" && !measure) {
+                    return strings.Call_StatusConnecting
+                } else {
+                    return value
+                }
+            }, timestamp)
+            if case .active = callState.state {
+                statusReception = reception
+            }
         }
         if self.shouldStayHiddenUntilConnection {
             switch callState.state {
@@ -1137,6 +1145,10 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 default:
                     break
             }
+        }
+
+        if let statusTitle = statusTitle {
+            self.statusNode.title = statusTitle
         }
         self.statusNode.status = statusValue
         self.statusNode.reception = statusReception
