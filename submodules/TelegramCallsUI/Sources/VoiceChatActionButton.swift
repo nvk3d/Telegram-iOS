@@ -1461,8 +1461,18 @@ final class BlobView: UIView {
         self.animateToNewShape()
     }
     
-    func stopAnimating() {
-        self.shapeLayer.removeAnimation(forKey: "path")
+    func stopAnimating(smooth: Bool = false) {
+        if smooth, let presentation = shapeLayer.presentation(), let presentationPath = presentation.path, let currentPath = shapeLayer.path {
+            let animation = CABasicAnimation(keyPath: "path")
+            animation.duration = CFTimeInterval(1.0 / (minSpeed + (maxSpeed - minSpeed) * speedLevel))
+            animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            animation.fromValue = presentationPath
+            animation.toValue = currentPath
+            animation.fillMode = .forwards
+            shapeLayer.add(animation, forKey: "path")
+        } else {
+            self.shapeLayer.removeAnimation(forKey: "path")
+        }
     }
     
     private func animateToNewShape() {

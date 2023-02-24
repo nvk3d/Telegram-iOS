@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import DeviceProximity
 import Display
 import AsyncDisplayKit
 import Postbox
@@ -395,6 +396,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     
     private var hiddenUIForActiveVideoCallOnce: Bool = false
     private var hideUIForActiveVideoCallTimer: SwiftSignalKit.Timer?
+
+    private var animationsPauseTimer: SwiftSignalKit.Timer?
     
     private var displayedCameraConfirmation: Bool = false
     private var displayedCameraTooltip: Bool = false
@@ -458,12 +461,15 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private var isUIHidden: Bool = false
     private var isVideoPaused: Bool = false
     private var isVideoPinched: Bool = false
+    private var isAnimationsPaused: Bool = false
     
     private enum PictureInPictureGestureState {
         case none
         case collapsing(didSelectCorner: Bool)
         case dragging(initialPosition: CGPoint, draggingPosition: CGPoint)
     }
+
+    private var proximityListener: Int?
     
     private var pictureInPictureGestureState: PictureInPictureGestureState = .none
     private var pictureInPictureCorner: VideoNodeCorner = .topRight
@@ -755,12 +761,23 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 strongSelf.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .animated(duration: 0.3, curve: .easeInOut))
             }
         }
+
+        proximityListener = DeviceProximityManager.shared().add { [weak self] proximited in
+            guard let self = self else { return }
+            guard proximited else { return }
+            self.updateAnimationsState(paused: true, force: true)
+        }
     }
     
     deinit {
         if let orientationDidChangeObserver = self.orientationDidChangeObserver {
             NotificationCenter.default.removeObserver(orientationDidChangeObserver)
         }
+        if let proximityListener = proximityListener {
+            DeviceProximityManager.shared().remove(proximityListener)
+        }
+        animationsPauseTimer?.invalidate()
+        animationsPauseTimer = nil
     }
     
     func displayCameraTooltip() {
@@ -1155,6 +1172,14 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             }
         }
 
+        if case .active = callState.state {
+            if !isAnimationsPaused, animationsPauseTimer == nil {
+                updateAnimationsState(paused: true, force: false)
+            }
+        } else {
+            updateAnimationsState(paused: false, force: false)
+        }
+
         if let statusTitle = statusTitle {
             self.statusNode.title = statusTitle
         }
@@ -1357,8 +1382,45 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             audioNode.animateOut()
 
         default:
+            guard !isAnimationsPaused else { return }
+            guard !audioNode.isAnimating else { return }
+
             audioNode.updateLevel(0.65)
             audioNode.startAnimating()
+        }
+    }
+
+    private func updateAnimationsState(paused: Bool, force: Bool) {
+        guard isAnimationsPaused != paused || force else { return }
+
+        animationsPauseTimer?.invalidate()
+        animationsPauseTimer = nil
+
+        if paused {
+            if force {
+                isAnimationsPaused = true
+
+                audioNode.stopAnimating()
+                // background stop
+            } else {
+                let timer = SwiftSignalKit.Timer(timeout: 10.0, repeat: false, completion: { [weak self] in
+                    guard let self = self else { return }
+
+                    self.isAnimationsPaused = true
+                    self.audioNode.stopAnimating()
+                    // background stop
+
+                    self.animationsPauseTimer?.invalidate()
+                    self.animationsPauseTimer = nil
+                }, queue: Queue.mainQueue())
+                timer.start()
+                animationsPauseTimer = timer
+            }
+        } else {
+            isAnimationsPaused = false
+
+            audioNode.startAnimating()
+            // background start
         }
     }
     
@@ -1932,6 +1994,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     @objc func tapGesture(_ recognizer: UITapGestureRecognizer) {
+        updateAnimationsState(paused: false, force: false)
+
         if case .ended = recognizer.state {
             if !self.pictureInPictureTransitionFraction.isZero {
                 self.view.window?.endEditing(true)
@@ -2139,6 +2203,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     @objc private func panGesture(_ recognizer: CallPanGestureRecognizer) {
+        updateAnimationsState(paused: false, force: false)
+
         switch recognizer.state {
             case .began:
                 guard let location = recognizer.firstLocation else {
@@ -2268,6 +2334,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        updateAnimationsState(paused: false, force: false)
+
         if self.debugNode != nil {
             return super.hitTest(point, with: event)
         }

@@ -174,14 +174,16 @@ private final class CallControllerAudioBlobView: UIView {
                 bigBlob.startAnimating()
             }
         } else {
-            mediumBlob.stopAnimating()
-            bigBlob.stopAnimating()
+            mediumBlob.stopAnimating(smooth: true)
+            bigBlob.stopAnimating(smooth: true)
         }
     }
 }
 
 final class CallControllerAudioNode: ASDisplayNode {
     // MARK: - Properties
+
+    var isAnimating: Bool { blobView.isAnimating }
 
     private var isAnimatingOut: Bool = false
     private var isAnimatedOut: Bool = false
@@ -245,6 +247,7 @@ final class CallControllerAudioNode: ASDisplayNode {
     func setSignal(_ signal: Signal<Float, NoError>) {
         audioLevelDisposable = signal.start { [weak self] value in
             guard let self = self else { return }
+            guard self.blobView.isAnimating else { return }
             self.blobView.updateLevel(CGFloat(value), immediately: false)
         }
     }
