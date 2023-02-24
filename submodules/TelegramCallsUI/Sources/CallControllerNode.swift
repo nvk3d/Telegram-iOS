@@ -415,6 +415,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private let toastNode: CallControllerToastContainerNode
     private let buttonsNode: CallControllerButtonsNode
     private var keyPreviewNode: CallControllerKeyPreviewNode?
+
+    private let ratingNode: CallControllerRatingNode
     
     private var debugNode: CallDebugNode?
     
@@ -518,6 +520,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.toastNode = CallControllerToastContainerNode(strings: self.presentationData.strings)
         self.keyButtonNode = CallControllerKeyButton()
         self.keyButtonNode.accessibilityElementsHidden = false
+
+        self.ratingNode = CallControllerRatingNode()
         
         super.init()
         
@@ -550,6 +554,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.containerNode.addSubnode(self.imageNode)
         self.containerNode.addSubnode(self.videoContainerNode)
         self.containerNode.addSubnode(self.statusNode)
+        self.containerNode.addSubnode(self.ratingNode)
         self.containerNode.addSubnode(self.buttonsNode)
         self.containerNode.addSubnode(self.toastNode)
         self.containerNode.addSubnode(self.keyButtonNode)
@@ -1810,11 +1815,18 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         audioNode.updateLayout(audioFrame.size, transition: transition)
 
         let hasVideoNodes = incomingVideoNodeValue != nil || outgoingVideoNodeValue != nil
+        let statusFrame: CGRect
         if hasVideoNodes {
-            transition.updateFrameAsPositionAndBounds(node: self.statusNode, frame: CGRect(origin: CGPoint(x: 0.0, y: backButtonNode.frame.midY - statusHeight / 2.0), size: CGSize(width: layout.size.width, height: statusHeight)))
+            statusFrame = CGRect(origin: CGPoint(x: 0.0, y: backButtonNode.frame.midY - statusHeight / 2.0), size: CGSize(width: layout.size.width, height: statusHeight))
         } else {
-            transition.updateFrameAsPositionAndBounds(node: self.statusNode, frame: CGRect(origin: CGPoint(x: 0.0, y: imageFrame.maxY + statusOffset), size: CGSize(width: layout.size.width, height: statusHeight)))
+            statusFrame = CGRect(origin: CGPoint(x: 0.0, y: imageFrame.maxY + statusOffset), size: CGSize(width: layout.size.width, height: statusHeight))
         }
+        transition.updateFrameAsPositionAndBounds(node: self.statusNode, frame: statusFrame)
+
+        let ratingAvailableWidth: CGFloat = layout.size.width - 44.0 * 2.0
+        let ratingHeight = ratingNode.updateLayout(ratingAvailableWidth)
+        let ratingFrame = CGRect(origin: CGPoint(x: 44.0, y: statusFrame.maxY + 50.0), size: CGSize(width: ratingAvailableWidth, height: ratingHeight))
+        transition.updateFrameAsPositionAndBounds(node: self.ratingNode, frame: ratingFrame)
         
         transition.updateFrame(node: self.toastNode, frame: CGRect(origin: CGPoint(x: 0.0, y: toastOriginY), size: CGSize(width: layout.size.width, height: toastHeight)))
         transition.updateFrame(node: self.buttonsNode, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonsOriginY), size: CGSize(width: layout.size.width, height: buttonsHeight)))
