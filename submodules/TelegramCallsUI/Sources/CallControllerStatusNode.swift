@@ -183,7 +183,7 @@ final class CallControllerStatusNode: ASDisplayNode {
                     }, queue: Queue.mainQueue())
                     self.statusTimer?.start()
                 } else {
-                    if case .timestamp = self.status {
+                    if case .timestamp = self.status, endTimestamp != nil {
                         endTimestamp = CFAbsoluteTimeGetCurrent()
                     }
                     if let validLayoutWidth = self.validLayoutWidth {
@@ -224,7 +224,7 @@ final class CallControllerStatusNode: ASDisplayNode {
     
     private var statusTimer: SwiftSignalKit.Timer?
     private var beginTimestamp: Double = CFAbsoluteTimeGetCurrent()
-    private var endTimestamp: Double = CFAbsoluteTimeGetCurrent()
+    private var endTimestamp: Double?
     private var validLayoutWidth: CGFloat?
     
     override init() {
@@ -305,9 +305,10 @@ final class CallControllerStatusNode: ASDisplayNode {
             }
         case let .timer(format, referenceTime):
             beginTimestamp = referenceTime
-            endTimestamp = CFAbsoluteTimeGetCurrent()
+            let end = CFAbsoluteTimeGetCurrent()
+            endTimestamp = end
 
-            let duration = Int32(endTimestamp - beginTimestamp)
+            let duration = Int32(end - beginTimestamp)
             let formattedStrings = formattedTimestamp(duration)
             let durationString: String = formattedStrings.string
             let measureDurationString: String = formattedStrings.measureString
@@ -328,7 +329,8 @@ final class CallControllerStatusNode: ASDisplayNode {
                 statusOffset += 8.0
             }
         case let .timestamp(icon):
-            let duration = Int32(endTimestamp - beginTimestamp)
+            let end = endTimestamp ?? beginTimestamp
+            let duration = Int32(end - beginTimestamp)
             let formattedStrings = formattedTimestamp(duration)
 
             statusText = formattedStrings.string
@@ -337,7 +339,7 @@ final class CallControllerStatusNode: ASDisplayNode {
             if icon != nil {
                 statusDisplayLogo = true
                 statusIcon = icon
-                statusOffset += 10.0
+                statusOffset += 8.0
             }
         }
         

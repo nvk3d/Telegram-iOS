@@ -225,7 +225,7 @@ final class CallControllerAudioNode: ASDisplayNode {
         let blobSize = CGSize(width: blobSize.width * aspect, height: blobSize.height * aspect)
         let blobFrame = CGRect(origin: CGPoint(x: (size.width - blobSize.width) / 2.0, y: (size.height - blobSize.height) / 2.0), size: blobSize)
         let previousBlobFrame = blobView.frame
-        transition.updateFrame(view: blobView, frame: blobFrame)
+        transition.updateFrameAsPositionAndBounds(layer: blobView.layer, frame: blobFrame)
 
         if blobFrame.size != previousBlobFrame.size {
             blobView.layoutSubviews()
@@ -270,7 +270,3 @@ final class CallControllerAudioNode: ASDisplayNode {
         }
     }
 }
-
-// 375.0 - 1.0
-// 414.0 - x
-// x = 414.0 / 375.0

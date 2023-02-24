@@ -347,6 +347,12 @@ private final class CallVideoNode: ASDisplayNode, PreviewVideoNode {
 }
 
 final class CallControllerNode: ViewControllerTracingNode, CallControllerNodeProtocol {
+    private enum AudioImageState {
+        case pulse
+        case active
+        case ended
+    }
+
     private enum VideoNodeCorner {
         case topLeft
         case topRight
@@ -392,6 +398,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     
     private var displayedCameraConfirmation: Bool = false
     private var displayedCameraTooltip: Bool = false
+
+    private var audioImageState: AudioImageState = .ended
         
     private var expandedVideoNode: CallVideoNode?
     private var minimizedVideoNode: CallVideoNode?
@@ -1161,11 +1169,12 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 self.isUIHidden = false
             }
         }
-        
+
         self.updateToastContent()
         self.updateButtonsMode()
         self.updateDimVisibility()
-        self.updateAudioAndImageState()
+        self.updateAudioImageState()
+        self.updateAudioWaves()
         
         if self.incomingVideoViewRequested || self.outgoingVideoViewRequested {
             if self.incomingVideoViewRequested && self.outgoingVideoViewRequested {
@@ -1190,6 +1199,106 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         let hasIncomingVideoNode = self.incomingVideoNodeValue != nil && self.expandedVideoNode === self.incomingVideoNodeValue
         self.videoContainerNode.isPinchGestureEnabled = hasIncomingVideoNode
+    }
+
+    private func updateAudioImageState() {
+        guard let callState = self.callState else { return }
+
+        let nextState: AudioImageState
+        switch callState.state {
+        case .active:
+            nextState = .active
+        case .waiting, .ringing, .connecting, .reconnecting, .requesting:
+            nextState = .pulse
+        case .terminating, .terminated:
+            nextState = .ended
+        }
+
+        let force: Bool = nextState == .pulse && imageNode.layer.animation(forKey: "transform.scale") == nil
+
+        guard nextState != audioImageState || force else { return }
+        audioImageState = nextState
+
+        let nodes: [ASDisplayNode] = [audioNode, imageNode]
+
+        switch audioImageState {
+        case .pulse:
+            for i in 0 ..< nodes.count {
+                let node = nodes[i]
+                let presentation = node.layer.presentation() ?? node.layer
+
+                let t = presentation.transform
+                let currentScale = sqrt((t.m11 * t.m11) + (t.m12 * t.m12) + (t.m13 * t.m13))
+
+                if node.layer.animation(forKey: "transform.scale") != nil {
+                    node.layer.removeAnimation(forKey: "transform.scale")
+                }
+
+                var values: [Float] = i == 0
+                    ? [Float(currentScale), 1.0, 1.2, 1.0, 0.95]
+                    : [Float(currentScale), 1.0, 1.05, 1.0, 0.95]
+
+                if currentScale == 1.0 {
+                    _ = values.removeFirst()
+                }
+
+                let anim = CAKeyframeAnimation(keyPath: "transform.scale")
+                anim.values = values
+                anim.duration = 1.5
+                anim.autoreverses = true
+                anim.repeatCount = .infinity
+
+                node.layer.add(anim, forKey: "transform.scale")
+            }
+
+        case .active:
+            for i in 0 ..< nodes.count {
+                let node = nodes[i]
+                let presentation = node.layer.presentation() ?? node.layer
+
+                let t = presentation.transform
+                let currentScale = sqrt((t.m11 * t.m11) + (t.m12 * t.m12) + (t.m13 * t.m13))
+                let maxScale: CGFloat = i == 0 ? 1.4 : 1.15
+                let minScale: CGFloat = i == 0 ? 0.85 : 0.85
+
+                if node.layer.animation(forKey: "transform.scale") != nil {
+                    node.layer.removeAnimation(forKey: "transform.scale")
+                }
+
+                let anim = CAKeyframeAnimation(keyPath: "transform.scale")
+                anim.values = [Float(currentScale), Float(maxScale), Float(minScale), Float(1.0)]
+                anim.keyTimes = [0.0, 0.4, 0.8, 1.0]
+                anim.duration = 0.5
+                anim.timingFunction = CAMediaTimingFunction(name: .easeOut)
+
+                node.layer.add(anim, forKey: "transform.scale")
+                node.layer.transform = CATransform3DMakeScale(1.0, 1.0, 1.0)
+            }
+
+        case .ended:
+            guard imageNode.layer.animation(forKey: "transform.scale") != nil else { break }
+
+            for i in 0 ..< nodes.count {
+                let node = nodes[i]
+                let presentation = node.layer.presentation() ?? node.layer
+
+                let t = presentation.transform
+                let currentScale = sqrt((t.m11 * t.m11) + (t.m12 * t.m12) + (t.m13 * t.m13))
+
+                if node.layer.animation(forKey: "transform.scale") != nil {
+                    node.layer.removeAnimation(forKey: "transform.scale")
+                }
+
+                let anim = CABasicAnimation(keyPath: "transform.scale")
+                anim.fromValue = NSNumber(value: Float(currentScale))
+                anim.toValue = NSNumber(value: Float(1.0))
+                anim.duration = 0.2
+                anim.timingFunction = CAMediaTimingFunction(name: .easeOut)
+
+                node.layer.add(anim, forKey: "transform.scale")
+                node.layer.transform = CATransform3DMakeScale(1.0, 1.0, 1.0)
+            }
+        }
     }
     
     private func updateToastContent() {
@@ -1217,7 +1326,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                     self.displayToastsAfterTimestamp = CACurrentMediaTime() + 1.5
                 }
             }
-            if self.isMuted, let (availableOutputs, _) = self.audioOutputState, availableOutputs.count > 2 {
+            if self.isMuted {
                 toastContent.insert(.mute)
             }
             self.toastContent = toastContent
@@ -1237,7 +1346,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.statusNode.setVisible(visible || self.keyPreviewNode != nil, transition: transition)
     }
 
-    private func updateAudioAndImageState() {
+    private func updateAudioWaves() {
         guard let callState = callState else { return }
 
         switch callState.state {
@@ -1557,11 +1666,11 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         var overlayAlpha: CGFloat = min(pinchTransitionAlpha, uiDisplayTransition)
         var toastAlpha: CGFloat = min(pinchTransitionAlpha, pipTransitionAlpha)
-        
+
         switch self.callState?.state {
         case .terminated, .terminating:
-            overlayAlpha *= 0.5
-            toastAlpha *= 0.5
+            overlayAlpha = 0.0
+            toastAlpha = 0.0
         default:
             break
         }
@@ -1615,11 +1724,10 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
 
         let audioSize = CGSize(width: layout.size.width, height: layout.size.width)
         let audioFrame = CGRect(origin: CGPoint(x: imageFrame.midX - audioSize.width / 2.0, y: imageFrame.midY - audioSize.height / 2.0), size: audioSize)
-        transition.updateFrame(node: audioNode, frame: audioFrame)
+        transition.updateFrameAsPositionAndBounds(node: audioNode, frame: audioFrame)
         audioNode.updateLayout(audioFrame.size, transition: transition)
 
         transition.updateFrame(node: self.statusNode, frame: CGRect(origin: CGPoint(x: 0.0, y: imageFrame.maxY + statusOffset), size: CGSize(width: layout.size.width, height: statusHeight)))
-        transition.updateAlpha(node: self.statusNode, alpha: overlayAlpha)
         
         transition.updateFrame(node: self.toastNode, frame: CGRect(origin: CGPoint(x: 0.0, y: toastOriginY), size: CGSize(width: layout.size.width, height: toastHeight)))
         transition.updateFrame(node: self.buttonsNode, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonsOriginY), size: CGSize(width: layout.size.width, height: buttonsHeight)))
