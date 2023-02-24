@@ -4,35 +4,13 @@ import Display
 import AsyncDisplayKit
 import SwiftSignalKit
 
-private let compactNameFont = Font.regular(22.0)
-private let regularNameFont = Font.regular(28.0)
+private let compactExpandNameFont = Font.regular(22.0)
+private let compactCompactNameFont = Font.semibold(22.0)
+private let regularExpandNameFont = Font.regular(28.0)
+private let regularCompactNameFont = Font.semibold(28.0)
 
 private let compactStatusFont = Font.regular(16.0)
 private let regularStatusFont = Font.regular(16.0)
-
-enum CallControllerStatusValue: Equatable {
-    case text(string: String, loading: Bool)
-    case timer((String, Bool) -> String, Double)
-    case timestamp(icon: UIImage?)
-
-    var isTimestamp: Bool {
-        if case .timestamp = self { return true }
-        return false
-    }
-    
-    static func == (lhs: CallControllerStatusValue, rhs: CallControllerStatusValue) -> Bool {
-        if case let .text(lText, lLoading) = lhs, case let .text(rText, rLoading) = rhs {
-            return lText == rText && lLoading == rLoading
-        }
-        if case let .timer(_, lReferenceTime) = lhs, case let .timer(_, rReferenceTime) = rhs {
-            return lReferenceTime == rReferenceTime
-        }
-        if case let .timestamp(lIcon) = lhs, case let .timestamp(rIcon) = rhs {
-            return lIcon == nil && rIcon == nil || lIcon != nil && rIcon != nil
-        }
-        return false
-    }
-}
 
 private final class CallControllerLoadingNode: ASDisplayNode {
     // MARK: - Properties
@@ -120,6 +98,80 @@ private final class CallControllerLoadingNode: ASDisplayNode {
         dotLayers.forEach {
             $0.removeAnimation(forKey: "transform.scale")
             $0.removeAnimation(forKey: "backgroundColor")
+        }
+    }
+}
+
+enum CallControllerStatusValue: Equatable {
+    case text(string: String, loading: Bool)
+    case timer((String, Bool) -> String, Double)
+    case timestamp(icon: UIImage?)
+
+    var isTimestamp: Bool {
+        if case .timestamp = self { return true }
+        return false
+    }
+    
+    static func == (lhs: CallControllerStatusValue, rhs: CallControllerStatusValue) -> Bool {
+        if case let .text(lText, lLoading) = lhs, case let .text(rText, rLoading) = rhs {
+            return lText == rText && lLoading == rLoading
+        }
+        if case let .timer(_, lReferenceTime) = lhs, case let .timer(_, rReferenceTime) = rhs {
+            return lReferenceTime == rReferenceTime
+        }
+        if case let .timestamp(lIcon) = lhs, case let .timestamp(rIcon) = rhs {
+            return lIcon == nil && rIcon == nil || lIcon != nil && rIcon != nil
+        }
+        return false
+    }
+}
+
+enum CallControllerStatusDisplayMode {
+    case compact
+    case expand
+
+    var scaleTitle: CGFloat {
+        switch self {
+        case .compact:
+            return 0.6
+        case .expand:
+            return 1.0
+        }
+    }
+
+    var scaleStatus: CGFloat {
+        switch self {
+        case .compact:
+            return 0.8
+        case .expand:
+            return 1.0
+        }
+    }
+
+    var spacing: CGFloat {
+        switch self {
+        case .compact:
+            return -5.0
+        case .expand:
+            return 0.0
+        }
+    }
+
+    var compactNameFont: UIFont {
+        switch self {
+        case .compact:
+            return compactCompactNameFont
+        case .expand:
+            return compactExpandNameFont
+        }
+    }
+
+    var regularNameFont: UIFont {
+        switch self {
+        case .compact:
+            return regularCompactNameFont
+        case .expand:
+            return regularExpandNameFont
         }
     }
 }
@@ -226,6 +278,8 @@ final class CallControllerStatusNode: ASDisplayNode {
     private var beginTimestamp: Double = CFAbsoluteTimeGetCurrent()
     private var endTimestamp: Double?
     private var validLayoutWidth: CGFloat?
+
+    private var displayMode: CallControllerStatusDisplayMode = .expand
     
     override init() {
         self.titleNode = TextNode()
@@ -267,6 +321,13 @@ final class CallControllerStatusNode: ASDisplayNode {
     deinit {
         self.statusTimer?.invalidate()
     }
+
+    func setDisplayMode(_ mode: CallControllerStatusDisplayMode, transition: ContainedViewLayoutTransition) {
+        displayMode = mode
+
+        transition.updateTransformScale(node: titleNode, scale: mode.scaleTitle)
+        transition.updateTransformScale(node: statusContainerNode, scale: mode.scaleStatus)
+    }
     
     func setVisible(_ visible: Bool, transition: ContainedViewLayoutTransition) {
         let alpha: CGFloat = visible ? 1.0 : 0.0
@@ -280,10 +341,10 @@ final class CallControllerStatusNode: ASDisplayNode {
         let nameFont: UIFont
         let statusFont: UIFont
         if constrainedWidth < 330.0 {
-            nameFont = compactNameFont
+            nameFont = displayMode.compactNameFont
             statusFont = compactStatusFont
         } else {
-            nameFont = regularNameFont
+            nameFont = displayMode.regularNameFont
             statusFont = regularStatusFont
         }
         
@@ -325,7 +386,7 @@ final class CallControllerStatusNode: ASDisplayNode {
                 statusText = _statusText
                 statusMeasureText = _statusMeasureText
             }
-            if self.reception != nil {
+            if self.reception != nil, !statusLoading {
                 statusOffset += 8.0
             }
         case let .timestamp(icon):
@@ -343,7 +404,7 @@ final class CallControllerStatusNode: ASDisplayNode {
             }
         }
         
-        let spacing: CGFloat = 1.0
+        let spacing: CGFloat = displayMode.spacing
         let (titleLayout, titleApply) = TextNode.asyncLayout(self.titleNode)(TextNodeLayoutArguments(attributedString: NSAttributedString(string: self.title, font: nameFont, textColor: .white), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: constrainedWidth - 20.0, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets(top: 2.0, left: 2.0, bottom: 2.0, right: 2.0)))
         let (statusMeasureLayout, statusMeasureApply) = TextNode.asyncLayout(self.statusMeasureNode)(TextNodeLayoutArguments(attributedString: NSAttributedString(string: statusMeasureText, font: statusFont, textColor: .white), backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: constrainedWidth - 20.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets(top: 2.0, left: 2.0, bottom: 2.0, right: 2.0)))
         let (statusLayout, statusApply) = TextNode.asyncLayout(self.statusNode)(TextNodeLayoutArguments(attributedString: NSAttributedString(string: statusText, font: statusFont, textColor: .white), backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: constrainedWidth - 20.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets(top: 2.0, left: 2.0, bottom: 2.0, right: 2.0)))
@@ -354,9 +415,15 @@ final class CallControllerStatusNode: ASDisplayNode {
         
         self.titleActivateAreaNode.accessibilityLabel = self.title
         self.statusActivateAreaNode.accessibilityLabel = statusText
-        
-        self.titleNode.frame = CGRect(origin: CGPoint(x: floor((constrainedWidth - titleLayout.size.width) / 2.0), y: 0.0), size: titleLayout.size)
-        self.statusContainerNode.frame = CGRect(origin: CGPoint(x: 0.0, y: titleLayout.size.height + spacing), size: CGSize(width: constrainedWidth, height: statusLayout.size.height))
+
+        let titleScaledHeight: CGFloat = titleLayout.size.height * displayMode.scaleTitle
+        let statusScaledHeight: CGFloat = statusLayout.size.height * displayMode.scaleStatus
+
+        let immediate: ContainedViewLayoutTransition = .immediate
+        immediate.updatePosition(node: titleNode, position: CGPoint(x: floor(constrainedWidth / 2.0), y: titleScaledHeight / 2.0))
+        immediate.updateBounds(node: titleNode, bounds: CGRect(origin: .zero, size: titleLayout.size))
+        immediate.updatePosition(node: statusContainerNode, position: CGPoint(x: constrainedWidth / 2.0, y: titleScaledHeight + spacing + statusScaledHeight / 2.0))
+        immediate.updateBounds(node: statusContainerNode, bounds: CGRect(origin: .zero, size: CGSize(width: constrainedWidth, height: statusLayout.size.height)))
         self.statusNode.frame = CGRect(origin: CGPoint(x: floor((constrainedWidth - statusMeasureLayout.size.width) / 2.0) + statusOffset, y: 0.0), size: statusLayout.size)
         self.receptionNode.frame = CGRect(origin: CGPoint(x: self.statusNode.frame.minX - receptionNodeSize.width + 4.0, y: (statusContainerNode.frame.height - receptionNodeSize.height) / 2.0), size: receptionNodeSize)
 
@@ -371,7 +438,7 @@ final class CallControllerStatusNode: ASDisplayNode {
             self.logoNode.frame = CGRect(origin: CGPoint(x: self.statusNode.frame.minX + firstLineOffset - imageSize.width, y: (self.statusContainerNode.frame.height - imageSize.height) / 2.0), size: imageSize)
         }
 
-        let loadingSize = self.loadingNode.measure(CGSize(width: constrainedWidth, height: titleLayout.size.height))
+        let loadingSize = self.loadingNode.measure(CGSize(width: constrainedWidth, height: statusScaledHeight))
         let loadingFrame = CGRect(origin: CGPoint(x: statusNode.frame.maxX + 6.0, y: (self.statusContainerNode.frame.height - loadingSize.height) / 2.0), size: loadingSize)
         self.loadingNode.frame = loadingFrame
         loadingNode.updateLayout(loadingSize)
@@ -385,7 +452,7 @@ final class CallControllerStatusNode: ASDisplayNode {
         self.titleActivateAreaNode.frame = self.titleNode.frame
         self.statusActivateAreaNode.frame = self.statusContainerNode.frame
         
-        return titleLayout.size.height + spacing + statusLayout.size.height
+        return titleScaledHeight + spacing + statusScaledHeight
     }
 
     private func formattedTimestamp(_ duration: Int32) -> (string: String, measureString: String) {

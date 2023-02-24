@@ -1136,7 +1136,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             }
 
             statusValue = .timer({ value, measure in
-                if isReconnecting || (self.outgoingVideoViewRequested && value == "00:00" && !measure) {
+                if isReconnecting {
                     return strings.Call_StatusConnecting
                 } else {
                     return value
@@ -1334,16 +1334,16 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     private func updateDimVisibility(transition: ContainedViewLayoutTransition = .animated(duration: 0.3, curve: .easeInOut)) {
-        guard let callState = self.callState else {
-            return
-        }
-        
-        var visible = true
-        if case .active = callState.state, self.incomingVideoNodeValue != nil || self.outgoingVideoNodeValue != nil {
-            visible = false
-        }
+//        guard let callState = self.callState else {
+//            return
+//        }
 
-        self.statusNode.setVisible(visible || self.keyPreviewNode != nil, transition: transition)
+//        var visible = true
+//        if case .active = callState.state, self.incomingVideoNodeValue != nil || self.outgoingVideoNodeValue != nil {
+//            visible = false
+//        }
+
+//        self.statusNode.setVisible(self.keyPreviewNode != nil, transition: transition)
     }
 
     private func updateAudioWaves() {
@@ -1710,6 +1710,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let imageSize = CGSize(width: imageSide, height: imageSide)
 
         let statusOffset: CGFloat = 20.0
+        let statusMode: CallControllerStatusDisplayMode = incomingVideoNodeValue != nil || outgoingVideoNodeValue != nil ? .compact : .expand
+        statusNode.setDisplayMode(statusMode, transition: transition)
         let statusHeight = self.statusNode.updateLayout(constrainedWidth: layout.size.width, transition: transition)
 
         let imageStatusOffset: CGFloat = 10.0
@@ -1727,7 +1729,12 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         transition.updateFrameAsPositionAndBounds(node: audioNode, frame: audioFrame)
         audioNode.updateLayout(audioFrame.size, transition: transition)
 
-        transition.updateFrame(node: self.statusNode, frame: CGRect(origin: CGPoint(x: 0.0, y: imageFrame.maxY + statusOffset), size: CGSize(width: layout.size.width, height: statusHeight)))
+        let hasVideoNodes = incomingVideoNodeValue != nil || outgoingVideoNodeValue != nil
+        if hasVideoNodes {
+            transition.updateFrameAsPositionAndBounds(node: self.statusNode, frame: CGRect(origin: CGPoint(x: 0.0, y: backButtonNode.frame.midY - statusHeight / 2.0), size: CGSize(width: layout.size.width, height: statusHeight)))
+        } else {
+            transition.updateFrameAsPositionAndBounds(node: self.statusNode, frame: CGRect(origin: CGPoint(x: 0.0, y: imageFrame.maxY + statusOffset), size: CGSize(width: layout.size.width, height: statusHeight)))
+        }
         
         transition.updateFrame(node: self.toastNode, frame: CGRect(origin: CGPoint(x: 0.0, y: toastOriginY), size: CGSize(width: layout.size.width, height: toastHeight)))
         transition.updateFrame(node: self.buttonsNode, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonsOriginY), size: CGSize(width: layout.size.width, height: buttonsHeight)))
