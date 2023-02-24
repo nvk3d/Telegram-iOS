@@ -1663,7 +1663,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let toastSpacing: CGFloat = 22.0
         let toastCollapsedOriginY = self.pictureInPictureTransitionFraction > 0.0 ? layout.size.height : layout.size.height - max(layout.intrinsicInsets.bottom, 20.0) - toastHeight
         let toastOriginY = interpolate(from: toastCollapsedOriginY, to: defaultButtonsOriginY - toastSpacing - toastHeight, value: uiDisplayTransition)
-        
+
+        let statusAlpha: CGFloat = min(pinchTransitionAlpha, uiDisplayTransition)
         var overlayAlpha: CGFloat = min(pinchTransitionAlpha, uiDisplayTransition)
         var toastAlpha: CGFloat = min(pinchTransitionAlpha, pipTransitionAlpha)
 
@@ -1701,7 +1702,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             transition.updateFrame(node: self.backButtonArrowNode, frame: CGRect(origin: CGPoint(x: 10.0, y: topOriginY + 11.0), size: image.size))
         }
         transition.updateFrame(node: self.backButtonNode, frame: CGRect(origin: CGPoint(x: 29.0, y: topOriginY + 11.0), size: backSize))
-        
+
+        transition.updateAlpha(node: self.statusNode, alpha: statusAlpha)
         transition.updateAlpha(node: self.backButtonArrowNode, alpha: overlayAlpha)
         transition.updateAlpha(node: self.backButtonNode, alpha: overlayAlpha)
         transition.updateAlpha(node: self.toastNode, alpha: toastAlpha)
