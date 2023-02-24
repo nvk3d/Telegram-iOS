@@ -423,7 +423,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     
     private var validLayout: (ContainerViewLayout, CGFloat)?
     private var disableActionsUntilTimestamp: Double = 0.0
-    
+
+    private var displayedActiveStateOnce: Bool = false
     private var displayedVersionOutdatedAlert: Bool = false
     
     var isMuted: Bool = false {
@@ -509,7 +510,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.backButtonArrowNode.displayWithoutProcessing = true
         self.backButtonArrowNode.displaysAsynchronously = false
         self.backButtonArrowNode.image = NavigationBarTheme.generateBackArrowImage(color: .white)
+        self.backButtonArrowNode.alpha = 0.0
         self.backButtonNode = HighlightableButtonNode()
+        self.backButtonNode.alpha = 0.0
         
         self.buttonsNode = CallControllerButtonsNode(strings: self.presentationData.strings)
         self.toastNode = CallControllerToastContainerNode(strings: self.presentationData.strings)
@@ -1726,12 +1729,22 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let toastCollapsedOriginY = self.pictureInPictureTransitionFraction > 0.0 ? layout.size.height : layout.size.height - max(layout.intrinsicInsets.bottom, 20.0) - toastHeight
         let toastOriginY = interpolate(from: toastCollapsedOriginY, to: defaultButtonsOriginY - toastSpacing - toastHeight, value: uiDisplayTransition)
 
+        let topPanelTransition: ContainedViewLayoutTransition
+        if case .active = callState?.state, !displayedActiveStateOnce {
+            displayedActiveStateOnce = true
+            topPanelTransition = .animated(duration: 0.5, curve: .spring)
+        } else {
+            topPanelTransition = transition
+        }
+
+        var topPanelAlpha: CGFloat = displayedActiveStateOnce ? min(pinchTransitionAlpha, uiDisplayTransition) : 0.0
         let statusAlpha: CGFloat = min(pinchTransitionAlpha, uiDisplayTransition)
         var overlayAlpha: CGFloat = min(pinchTransitionAlpha, uiDisplayTransition)
         var toastAlpha: CGFloat = min(pinchTransitionAlpha, pipTransitionAlpha)
 
         switch self.callState?.state {
         case .terminated, .terminating:
+            topPanelAlpha = 0.0
             overlayAlpha = 0.0
             toastAlpha = 0.0
         default:
@@ -1758,16 +1771,19 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         let navigationOffset: CGFloat = max(20.0, layout.safeInsets.top)
         let topOriginY = interpolate(from: -20.0, to: navigationOffset, value: uiDisplayTransition)
+
+        let backArrowOffset: CGFloat = displayedActiveStateOnce ? 0.0 : 15.0
+        let backButtonOffset: CGFloat = displayedActiveStateOnce ? 0.0 : 35.0
         
         let backSize = self.backButtonNode.measure(CGSize(width: 320.0, height: 100.0))
         if let image = self.backButtonArrowNode.image {
-            transition.updateFrame(node: self.backButtonArrowNode, frame: CGRect(origin: CGPoint(x: 10.0, y: topOriginY + 11.0), size: image.size))
+            topPanelTransition.updateFrame(node: self.backButtonArrowNode, frame: CGRect(origin: CGPoint(x: 10.0 + backArrowOffset, y: topOriginY + 11.0), size: image.size))
         }
-        transition.updateFrame(node: self.backButtonNode, frame: CGRect(origin: CGPoint(x: 29.0, y: topOriginY + 11.0), size: backSize))
+        topPanelTransition.updateFrame(node: self.backButtonNode, frame: CGRect(origin: CGPoint(x: 29.0 + backButtonOffset, y: topOriginY + 11.0), size: backSize))
 
+        topPanelTransition.updateAlpha(node: self.backButtonArrowNode, alpha: topPanelAlpha)
+        topPanelTransition.updateAlpha(node: self.backButtonNode, alpha: topPanelAlpha)
         transition.updateAlpha(node: self.statusNode, alpha: statusAlpha)
-        transition.updateAlpha(node: self.backButtonArrowNode, alpha: overlayAlpha)
-        transition.updateAlpha(node: self.backButtonNode, alpha: overlayAlpha)
         transition.updateAlpha(node: self.toastNode, alpha: toastAlpha)
 
         let imageSide = layout.size.width / 3.0
