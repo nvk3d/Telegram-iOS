@@ -633,4 +633,9 @@ final class CallControllerButtonsNode: ASDisplayNode {
         
         return super.hitTest(point, with: event)
     }
+
+    func endButtonPosition() -> CGPoint {
+        guard let button = buttonNodes[.acceptOrEnd] else { return .zero }
+        return CGPoint(x: button.frame.midX, y: button.frame.midY)
+    }
 }

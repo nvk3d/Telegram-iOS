@@ -139,8 +139,8 @@ final class CallControllerRatingNode: ASDisplayNode {
         addSubnode(subtitleNode)
         addSubnode(starsContainerNode)
 
-        starsContainerNode.starsSelected = { stars in
-            print("stars selected: \(stars)")
+        starsContainerNode.starsSelected = { [weak self] stars in
+            self?.rateTapped?(stars)
         }
     }
 

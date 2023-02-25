@@ -417,6 +417,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private var keyPreviewNode: CallControllerKeyPreviewNode?
 
     private let ratingNode: CallControllerRatingNode
+    private let closeContainerNode: CallControllerCloseContainerNode
     
     private var debugNode: CallDebugNode?
     
@@ -522,6 +523,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.keyButtonNode.accessibilityElementsHidden = false
 
         self.ratingNode = CallControllerRatingNode()
+        self.closeContainerNode = CallControllerCloseContainerNode()
         
         super.init()
         
@@ -554,8 +556,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.containerNode.addSubnode(self.imageNode)
         self.containerNode.addSubnode(self.videoContainerNode)
         self.containerNode.addSubnode(self.statusNode)
-        self.containerNode.addSubnode(self.ratingNode)
         self.containerNode.addSubnode(self.buttonsNode)
+        self.containerNode.addSubnode(self.ratingNode)
+        self.containerNode.addSubnode(self.closeContainerNode)
         self.containerNode.addSubnode(self.toastNode)
         self.containerNode.addSubnode(self.keyButtonNode)
         self.containerNode.addSubnode(self.backButtonArrowNode)
@@ -708,6 +711,14 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.keyButtonNode.addTarget(self, action: #selector(self.keyPressed), forControlEvents: .touchUpInside)
         
         self.backButtonNode.addTarget(self, action: #selector(self.backPressed), forControlEvents: .touchUpInside)
+
+        self.ratingNode.rateTapped = { [weak self] rate in
+            guard let self = self else { return }
+
+            print("-- rating: \(rate)")
+            let position = self.buttonsNode.endButtonPosition()
+            self.closeContainerNode.animateIn(position)
+        }
         
         if shouldStayHiddenUntilConnection {
             self.containerNode.alpha = 0.0
@@ -1827,6 +1838,11 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let ratingHeight = ratingNode.updateLayout(ratingAvailableWidth)
         let ratingFrame = CGRect(origin: CGPoint(x: 44.0, y: statusFrame.maxY + 50.0), size: CGSize(width: ratingAvailableWidth, height: ratingHeight))
         transition.updateFrameAsPositionAndBounds(node: self.ratingNode, frame: ratingFrame)
+
+        let closeAvailableWidth: CGFloat = layout.size.width - 44.0 * 2.0
+        let closeHeight: CGFloat = closeContainerNode.updateLayout(CGSize(width: closeAvailableWidth, height: 50.0), transition: .immediate)
+        let closeFrame = CGRect(origin: CGPoint(x: 44.0, y: buttonsOriginY + 5.0), size: CGSize(width: closeAvailableWidth, height: closeHeight))
+        transition.updateFrame(node: closeContainerNode, frame: closeFrame)
         
         transition.updateFrame(node: self.toastNode, frame: CGRect(origin: CGPoint(x: 0.0, y: toastOriginY), size: CGSize(width: layout.size.width, height: toastHeight)))
         transition.updateFrame(node: self.buttonsNode, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonsOriginY), size: CGSize(width: layout.size.width, height: buttonsHeight)))
