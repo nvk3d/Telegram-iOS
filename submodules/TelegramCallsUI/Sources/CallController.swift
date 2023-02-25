@@ -26,6 +26,7 @@ protocol CallControllerNodeProtocol: AnyObject {
     var presentCallRating: ((CallId, Bool) -> Void)? { get set }
     var present: ((ViewController) -> Void)? { get set }
     var callEnded: ((Bool) -> Void)? { get set }
+    var callRated: ((Bool, Bool) -> Void)? { get set }
     var dismissedInteractively: (() -> Void)? { get set }
     var dismissAllTooltips: (() -> Void)? { get set }
     
@@ -57,7 +58,9 @@ public final class CallController: ViewController {
     
     private var presentationData: PresentationData
     private var didPlayPresentationAnimation = false
-    private var endCallRequested: Bool = false
+    private var endCallDelayed: Bool = false
+    private var endCallRateRequested: Bool = false
+    private var callRateDismissRequested: Bool = false
     
     private var peer: Peer?
     
@@ -225,12 +228,10 @@ public final class CallController: ViewController {
         }
         
         self.controllerNode.endCall = { [weak self] in
-            self?.endCallRequested = true
             let _ = self?.call.hangUp()
         }
         
         self.controllerNode.back = { [weak self] in
-            self?.endCallRequested = false
             let _ = self?.dismiss()
         }
         
@@ -273,8 +274,10 @@ public final class CallController: ViewController {
         }
         
         self.controllerNode.callEnded = { [weak self] didPresentRating in
-            if let strongSelf = self, !didPresentRating {
-                let _ = (combineLatest(strongSelf.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.callListSettings]), ApplicationSpecificNotice.getCallsTabTip(accountManager: strongSelf.sharedContext.accountManager))
+            guard let self = self else { return }
+
+            if !didPresentRating {
+                let _ = (combineLatest(self.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.callListSettings]), ApplicationSpecificNotice.getCallsTabTip(accountManager: self.sharedContext.accountManager))
                 |> map { sharedData, callsTabTip -> Int32 in
                     var value = false
                     if let settings = sharedData.entries[ApplicationSpecificSharedDataKeys.callListSettings]?.get(CallListSettings.self) {
@@ -298,6 +301,27 @@ public final class CallController: ViewController {
                         }
                     }
                 })
+            } else {
+                self.endCallDelayed = true
+            }
+        }
+
+        self.controllerNode.callRated = { [weak self] force, animationEnded in
+            guard let self = self else { return }
+            guard !self.endCallRateRequested || force else { return }
+
+            self.endCallRateRequested = true
+
+            if force || animationEnded {
+                self.endCallDelayed = false
+                self.dismiss()
+                self.callRateDismissRequested = true
+            } else {
+                Queue.mainQueue().after(0.3) { [weak self] in
+                    self?.endCallDelayed = false
+                    self?.dismiss()
+                    self?.callRateDismissRequested = true
+                }
             }
         }
         
@@ -349,7 +373,9 @@ public final class CallController: ViewController {
     }
     
     override public func dismiss(completion: (() -> Void)? = nil) {
-        guard !endCallRequested else { return }
+        guard !endCallDelayed else { return }
+        guard !callRateDismissRequested else { return }
+
         self.controllerNode.animateOut(completion: { [weak self] in
             self?.didPlayPresentationAnimation = false
             self?.presentingViewController?.dismiss(animated: false, completion: nil)

@@ -7,23 +7,13 @@ private let defaultCornerRadius: CGFloat = 14.0
 private let smallCornerRadius: CGFloat = 4.0
 
 private let defaultButtonHeight: CGFloat = 50.0
-private let largeButtonHeight: CGFloat = 56.0
+private let largeButtonHeight: CGFloat = 60.0
 
 private final class CloseTopButtonNode: ASButtonNode {
     // MARK: - Properties
 
     private(set) var isAnimatedIn: Bool = false
     private(set) var isAnimatedOut: Bool = false
-
-    override var frame: CGRect {
-        get { super.frame }
-        set {
-            super.frame = newValue
-            backgroundLayer.frame = bounds
-            backgroundMaskLayer.frame = bounds
-            updateTextMask()
-        }
-    }
 
     private var _title: NSAttributedString?
 
@@ -44,6 +34,7 @@ private final class CloseTopButtonNode: ASButtonNode {
         
         backgroundMaskLayer = CAShapeLayer()
         backgroundMaskLayer.contentsScale = UIScreen.main.scale
+        backgroundMaskLayer.fillRule = .evenOdd
 
         super.init()
 
@@ -58,32 +49,19 @@ private final class CloseTopButtonNode: ASButtonNode {
 
     override func setTitle(_ title: String, with font: UIFont, with color: UIColor, for state: UIControl.State) {
         _title = NSAttributedString(string: title, font: font, textColor: color)
-        updateTextMask()
+        updateTextMask(.immediate)
     }
 
     func animateIn(_ position: CGPoint, transition: ContainedViewLayoutTransition, completion: (() -> Void)? = nil) {
         guard !isAnimatedIn else { return }
         isAnimatedIn = true
 
-        let beginPath = UIBezierPath(roundedRect: calculateMaskFrame(for: !isAnimatedIn, position: position, size: frame.size), cornerRadius: frame.height / 2.0).cgPath
+        let beginPath = UIBezierPath(roundedRect: calculateMaskFrame(for: !isAnimatedIn, position: position, size: frame.size), cornerRadius: frame.size.height / 2.0).cgPath
         maskLayer.path = beginPath
 
         let endPath = UIBezierPath(roundedRect: calculateMaskFrame(for: isAnimatedIn, position: position, size: frame.size), cornerRadius: defaultCornerRadius).cgPath
 
-        if case let .animated(duration, curve) = transition {
-            let pathAnim = maskLayer.makeAnimation(
-                from: beginPath,
-                to: endPath,
-                keyPath: "path",
-                timingFunction: curve.timingFunction,
-                duration: duration
-            )
-            pathAnim.completion = { _ in completion?() }
-            maskLayer.add(pathAnim, forKey: "path")
-        }
-
-        maskLayer.path = endPath
-        if case .immediate = transition {
+        transition.updatePath(layer: maskLayer, path: endPath) { _ in
             completion?()
         }
     }
@@ -103,7 +81,6 @@ private final class CloseTopButtonNode: ASButtonNode {
                 timingFunction: curve.timingFunction,
                 duration: duration / 5.0
             )
-            pathAnim.completion = { _ in completion?() }
             maskLayer.add(pathAnim, forKey: "path")
         }
 
@@ -117,6 +94,13 @@ private final class CloseTopButtonNode: ASButtonNode {
         transition.updateBackgroundColor(layer: backgroundLayer, color: color)
     }
 
+    func updateFrame(_ frame: CGRect, transition: ContainedViewLayoutTransition) {
+        transition.updateFrame(node: self, frame: frame)
+        transition.updateFrame(layer: backgroundLayer, frame: CGRect(origin: .zero, size: frame.size))
+        transition.updateFrame(layer: backgroundMaskLayer, frame: CGRect(origin: .zero, size: frame.size))
+        updateTextMask(transition)
+    }
+
     // MARK: - Private. Help
 
     private func calculateCornerRadius(for isAnimatedIn: Bool, size: CGSize) -> CGFloat {
@@ -128,13 +112,13 @@ private final class CloseTopButtonNode: ASButtonNode {
             return CGRect(origin: .zero, size: CGSize(width: size.width + maskSideInset, height: size.height))
         } else {
             var size = size
-            size.height = largeButtonHeight
-            let y = (defaultButtonHeight - largeButtonHeight) / 2.0
+            size.height = defaultButtonHeight // largeButtonHeight
+            let y = (defaultButtonHeight - size.height) / 2.0
             return CGRect(origin: CGPoint(x: position.x - size.height / 2.0, y: y), size: CGSize(width: size.height, height: size.height))
         }
     }
 
-    private func updateTextMask() {
+    private func updateTextMask(_ transition: ContainedViewLayoutTransition) {
         guard let title = _title else { backgroundMaskLayer.path = nil; return }
 
         let mutablePath = CGMutablePath()
@@ -145,8 +129,7 @@ private final class CloseTopButtonNode: ASButtonNode {
 
         mutablePath.addPath(UIBezierPath(roundedRect: bounds, cornerRadius: defaultCornerRadius).cgPath)
 
-        backgroundMaskLayer.path = mutablePath
-        backgroundMaskLayer.fillRule = .evenOdd
+        transition.updatePath(layer: backgroundMaskLayer, path: mutablePath)
     }
 
     private func generatePaths(_ attributedString: NSAttributedString, position: CGPoint) -> [CGPath] {
@@ -270,11 +253,11 @@ final class CallControllerCloseContainerNode: ASDisplayNode {
 
     func updateLayout(_ size: CGSize, transition: ContainedViewLayoutTransition) -> CGFloat {
         let buttonHeight: CGFloat = defaultButtonHeight
-        let temporaryHeight: CGFloat = isAnimatedIn ? buttonHeight : largeButtonHeight
+        let temporaryHeight: CGFloat = isAnimatedIn ? buttonHeight : defaultButtonHeight //largeButtonHeight
 
         let buttonFrame = CGRect(origin: CGPoint(x: 0.0, y: (buttonHeight - temporaryHeight) / 2.0), size: CGSize(width: size.width, height: temporaryHeight))
         transition.updateFrame(node: bottomButton, frame: buttonFrame)
-        transition.updateFrame(node: topButton, frame: buttonFrame)
+        topButton.updateFrame(buttonFrame, transition: transition)
 
         return buttonHeight
     }
@@ -283,6 +266,8 @@ final class CallControllerCloseContainerNode: ASDisplayNode {
 
     func animateIn(_ position: CGPoint) {
         guard !isAnimatedIn else { return }
+
+        _ = updateLayout(frame.size, transition: .immediate)
         isAnimatedIn = true
 
         let converted = supernode?.convert(position, to: self) ?? position

@@ -453,6 +453,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     var back: (() -> Void)?
     var presentCallRating: ((CallId, Bool) -> Void)?
     var callEnded: ((Bool) -> Void)?
+    var callRated: ((Bool, Bool) -> Void)?
     var dismissedInteractively: (() -> Void)?
     var present: ((ViewController) -> Void)?
     var dismissAllTooltips: (() -> Void)?
@@ -466,6 +467,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private var isVideoPaused: Bool = false
     private var isVideoPinched: Bool = false
     private var isAnimationsPaused: Bool = false
+
+    private var rateCallId: CallId?
     
     private enum PictureInPictureGestureState {
         case none
@@ -523,7 +526,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.keyButtonNode.accessibilityElementsHidden = false
 
         self.ratingNode = CallControllerRatingNode()
+        self.ratingNode.alpha = 0.0
         self.closeContainerNode = CallControllerCloseContainerNode()
+        self.closeContainerNode.alpha = 0.0
         
         super.init()
         
@@ -715,9 +720,14 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.ratingNode.rateTapped = { [weak self] rate in
             guard let self = self else { return }
 
-            print("-- rating: \(rate)")
-            let position = self.buttonsNode.endButtonPosition()
-            self.closeContainerNode.animateIn(position)
+            if let callId = self.rateCallId {
+                let _ = rateCallAndSendLogs(engine: TelegramEngine(account: account), callId: callId, starsCount: rate, comment: "", userInitiated: false, includeLogs: false).start()
+            }
+            self.callRated?(false, false)
+        }
+        self.closeContainerNode.requestAnimationEnded = { [weak self] force in
+            guard let self = self else { return }
+            self.callRated?(force, true)
         }
         
         if shouldStayHiddenUntilConnection {
@@ -1235,8 +1245,21 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         if case let .terminated(id, _, reportRating) = callState.state, let callId = id {
             let presentRating = reportRating || self.forceReportRating
-            if presentRating {
-                self.presentCallRating?(callId, self.call.isVideo)
+            if presentRating, rateCallId == nil {
+                //self.presentCallRating?(callId, self.call.isVideo)
+                self.rateCallId = callId
+                let transition: ContainedViewLayoutTransition = .animated(duration: 0.5, curve: .spring)
+                transition.updateAlpha(node: self.ratingNode, alpha: 1.0)
+
+                let animation = CAKeyframeAnimation(keyPath: "transform.scale")
+                animation.values = [Float(0.85), Float(1.05), Float(1.0)]
+                animation.keyTimes = [0.0, 0.9, 1.0]
+                animation.duration = 0.5
+                animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                self.ratingNode.layer.add(animation, forKey: "transform.scale")
+
+                self.closeContainerNode.alpha = 1.0
+                self.closeContainerNode.animateIn(buttonsNode.endButtonPosition())
             }
             self.callEnded?(presentRating)
         }
@@ -1834,15 +1857,17 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         }
         transition.updateFrameAsPositionAndBounds(node: self.statusNode, frame: statusFrame)
 
-        let ratingAvailableWidth: CGFloat = layout.size.width - 44.0 * 2.0
-        let ratingHeight = ratingNode.updateLayout(ratingAvailableWidth)
-        let ratingFrame = CGRect(origin: CGPoint(x: 44.0, y: statusFrame.maxY + 50.0), size: CGSize(width: ratingAvailableWidth, height: ratingHeight))
-        transition.updateFrameAsPositionAndBounds(node: self.ratingNode, frame: ratingFrame)
-
         let closeAvailableWidth: CGFloat = layout.size.width - 44.0 * 2.0
         let closeHeight: CGFloat = closeContainerNode.updateLayout(CGSize(width: closeAvailableWidth, height: 50.0), transition: .immediate)
-        let closeFrame = CGRect(origin: CGPoint(x: 44.0, y: buttonsOriginY + 5.0), size: CGSize(width: closeAvailableWidth, height: closeHeight))
+        let closeOriginY: CGFloat = layout.size.height - (max(layout.intrinsicInsets.bottom + 19.0, 46.0) + closeHeight + 5.0)
+        let closeFrame = CGRect(origin: CGPoint(x: 44.0, y: closeOriginY), size: CGSize(width: closeAvailableWidth, height: closeHeight))
         transition.updateFrame(node: closeContainerNode, frame: closeFrame)
+
+        let ratingAvailableWidth: CGFloat = layout.size.width - 44.0 * 2.0
+        let ratingHeight = ratingNode.updateLayout(ratingAvailableWidth)
+        let ratingOffset: CGFloat = layout.intrinsicInsets.bottom > 0.0 ? 66.0 : 50.0
+        let ratingFrame = CGRect(origin: CGPoint(x: 44.0, y: closeFrame.minY - ratingOffset - ratingHeight), size: CGSize(width: ratingAvailableWidth, height: ratingHeight))
+        transition.updateFrameAsPositionAndBounds(node: self.ratingNode, frame: ratingFrame)
         
         transition.updateFrame(node: self.toastNode, frame: CGRect(origin: CGPoint(x: 0.0, y: toastOriginY), size: CGSize(width: layout.size.width, height: toastHeight)))
         transition.updateFrame(node: self.buttonsNode, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonsOriginY), size: CGSize(width: layout.size.width, height: buttonsHeight)))

@@ -63,6 +63,7 @@ final class LegacyCallControllerNode: ASDisplayNode, CallControllerNodeProtocol 
     var back: (() -> Void)?
     var presentCallRating: ((CallId, Bool) -> Void)?
     var callEnded: ((Bool) -> Void)?
+    var callRated: ((Bool, Bool) -> Void)?
     var dismissedInteractively: (() -> Void)?
     var present: ((ViewController) -> Void)?
     var dismissAllTooltips: (() -> Void)?
