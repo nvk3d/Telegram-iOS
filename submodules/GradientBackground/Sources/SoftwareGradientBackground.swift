@@ -567,4 +567,20 @@ public final class GradientBackgroundNode: ASDisplayNode {
             completion()
         }
     }
+
+    public func stopAllAnimationsAndSavePresentation() {
+        let contentPresentation = contentView.layer.presentation() ?? contentView.layer
+        let contents = contentPresentation.contents
+        contentView.layer.removeAllAnimations()
+        contentView.layer.contents = contents
+
+        for cloneNode in self.cloneNodes {
+            guard let value = cloneNode.value else { continue }
+
+            let presentation = value.layer.presentation() ?? value.layer
+            let contents = presentation.contents
+            value.layer.removeAllAnimations()
+            value.contents = contents
+        }
+    }
 }

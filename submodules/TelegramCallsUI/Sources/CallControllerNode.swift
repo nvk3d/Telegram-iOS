@@ -377,6 +377,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private let containerNode: ASDisplayNode
     private let videoContainerNode: PinchSourceContainerNode
 
+    private let backgroundNode: CallControllerBackgroundNode
     private let audioNode: CallControllerAudioNode
     private let imageNode: TransformImageNode
     private let statusNode: CallControllerStatusNode
@@ -413,6 +414,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private let backButtonArrowNode: ASImageNode
     private let backButtonNode: HighlightableButtonNode
     private let toastNode: CallControllerToastContainerNode
+    private let statusToastNode: CallControllerCustomToastNode
     private let buttonsNode: CallControllerButtonsNode
     private var keyPreviewNode: CallControllerKeyPreviewNode?
 
@@ -426,6 +428,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     
     private var validLayout: (ContainerViewLayout, CGFloat)?
     private var disableActionsUntilTimestamp: Double = 0.0
+
+    private var displayingStatusToast: Bool = false
 
     private var displayedActiveStateOnce: Bool = false
     private var displayedVersionOutdatedAlert: Bool = false
@@ -504,6 +508,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         self.videoContainerNode = PinchSourceContainerNode()
 
+        self.backgroundNode = CallControllerBackgroundNode()
+
         self.audioNode = CallControllerAudioNode()
 
         self.imageNode = TransformImageNode()
@@ -522,6 +528,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         self.buttonsNode = CallControllerButtonsNode(strings: self.presentationData.strings)
         self.toastNode = CallControllerToastContainerNode(strings: self.presentationData.strings)
+        self.statusToastNode = CallControllerCustomToastNode()
         self.keyButtonNode = CallControllerKeyButton()
         self.keyButtonNode.accessibilityElementsHidden = false
 
@@ -557,6 +564,10 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             }
         }
 
+        self.statusToastNode.update(title: "Weak network signal")
+        self.statusToastNode.alpha = 0.0
+
+        self.containerNode.addSubnode(self.backgroundNode)
         self.containerNode.addSubnode(self.audioNode)
         self.containerNode.addSubnode(self.imageNode)
         self.containerNode.addSubnode(self.videoContainerNode)
@@ -565,6 +576,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.containerNode.addSubnode(self.ratingNode)
         self.containerNode.addSubnode(self.closeContainerNode)
         self.containerNode.addSubnode(self.toastNode)
+        self.containerNode.addSubnode(self.statusToastNode)
         self.containerNode.addSubnode(self.keyButtonNode)
         self.containerNode.addSubnode(self.backButtonArrowNode)
         self.containerNode.addSubnode(self.backButtonNode)
@@ -1161,10 +1173,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             statusValue = .text(string: text, loading: true)
         case .active(let timestamp, let reception, let keyVisualHash), .reconnecting(let timestamp, let reception, let keyVisualHash):
             let strings = self.presentationData.strings
-            var isReconnecting = false
-            if case .reconnecting = callState.state {
-                isReconnecting = true
-            }
+
             if self.keyTextData?.0 != keyVisualHash {
                 let text = stringForEmojiHashOfData(keyVisualHash, 4)!
                 self.keyTextData = (keyVisualHash, text)
@@ -1181,15 +1190,11 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 }
             }
 
-            statusValue = .timer({ value, measure in
-                if isReconnecting {
-                    return strings.Call_StatusConnecting
-                } else {
-                    return value
-                }
-            }, timestamp)
             if case .active = callState.state {
+                statusValue = .timer({ value, _ in value }, timestamp)
                 statusReception = reception
+            } else {
+                statusValue = .text(string: strings.Call_StatusConnecting, loading: true)
             }
         }
         if self.shouldStayHiddenUntilConnection {
@@ -1206,7 +1211,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 updateAnimationsState(paused: true, force: false)
             }
         } else {
-            updateAnimationsState(paused: false, force: false)
+            updateAnimationsState(paused: false, force: true)
         }
 
         if let statusTitle = statusTitle {
@@ -1229,6 +1234,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.updateDimVisibility()
         self.updateAudioImageState()
         self.updateAudioWaves()
+        self.updateBackgroundState()
+        self.updateStatusToast()
         
         if self.incomingVideoViewRequested || self.outgoingVideoViewRequested {
             if self.incomingVideoViewRequested && self.outgoingVideoViewRequested {
@@ -1254,7 +1261,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 let animation = CAKeyframeAnimation(keyPath: "transform.scale")
                 animation.values = [Float(0.85), Float(1.05), Float(1.0)]
                 animation.keyTimes = [0.0, 0.9, 1.0]
-                animation.duration = 0.5
+                animation.duration = 0.3
                 animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 self.ratingNode.layer.add(animation, forKey: "transform.scale")
 
@@ -1367,6 +1374,50 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             }
         }
     }
+
+    private func updateBackgroundState() {
+        guard let callState = self.callState else { return }
+
+        switch callState.state {
+        case let .active(_, reception, _), let .reconnecting(_, reception, _):
+            if let reception = reception, reception < 2 {
+                backgroundNode.updateState(.weak)
+            } else {
+                backgroundNode.updateState(.active)
+            }
+
+        default:
+            backgroundNode.updateState(.connecting)
+        }
+
+        guard !isAnimationsPaused else { return }
+        guard !backgroundNode.isAnimating else { return }
+
+        backgroundNode.startAnimating()
+    }
+
+    private func updateStatusToast() {
+        guard let callState = self.callState else { return }
+
+        var displayStatusToast: Bool = false
+        switch callState.state {
+        case let .active(_, reception, _), let .reconnecting(_, reception, _):
+            if let reception = reception {
+                displayStatusToast = reception < 2
+            } else {
+                displayStatusToast = false
+            }
+        default:
+            break
+        }
+
+        guard displayingStatusToast != displayStatusToast else { return }
+        displayingStatusToast = displayStatusToast
+
+        let transition: ContainedViewLayoutTransition = .animated(duration: 0.3, curve: .spring)
+        transition.updateAlpha(node: statusToastNode, alpha: displayStatusToast ? 1.0 : 0.0)
+        statusToastNode.layer.animateScale(from: displayStatusToast ? 0.9 : 1.0, to: displayStatusToast ? 1.0 : 0.9, duration: 0.3, timingFunction: ContainedViewLayoutTransitionCurve.spring.timingFunction)
+    }
     
     private func updateToastContent() {
         guard let callState = self.callState else {
@@ -1443,14 +1494,14 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 isAnimationsPaused = true
 
                 audioNode.stopAnimating()
-                // background stop
+                backgroundNode.stopAnimating()
             } else {
                 let timer = SwiftSignalKit.Timer(timeout: 10.0, repeat: false, completion: { [weak self] in
                     guard let self = self else { return }
 
                     self.isAnimationsPaused = true
                     self.audioNode.stopAnimating()
-                    // background stop
+                    self.backgroundNode.stopAnimating()
 
                     self.animationsPauseTimer?.invalidate()
                     self.animationsPauseTimer = nil
@@ -1462,7 +1513,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             isAnimationsPaused = false
 
             audioNode.startAnimating()
-            // background start
+            backgroundNode.startAnimating()
         }
     }
     
@@ -1798,6 +1849,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         transition.updateFrame(node: self.containerTransformationNode, frame: containerFrame)
         transition.updateSublayerTransformScale(node: self.containerTransformationNode, scale: min(1.0, containerFrame.width / layout.size.width * 1.01))
         transition.updateCornerRadius(layer: self.containerTransformationNode.layer, cornerRadius: self.pictureInPictureTransitionFraction * 10.0)
+
+        transition.updateFrame(node: backgroundNode, frame: containerFullScreenFrame)
+        backgroundNode.updateLayout(containerFullScreenFrame.size, transition: transition)
         
         transition.updateFrame(node: self.containerNode, frame: CGRect(origin: CGPoint(x: (containerFrame.width - layout.size.width) / 2.0, y: floor(containerFrame.height - layout.size.height) / 2.0), size: layout.size))
         transition.updateFrame(node: self.videoContainerNode, frame: containerFullScreenFrame)
@@ -1809,6 +1863,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         }
         
         let navigationOffset: CGFloat = max(20.0, layout.safeInsets.top)
+        let navigationHeight: CGFloat = 44.0
         let topOriginY = interpolate(from: -20.0, to: navigationOffset, value: uiDisplayTransition)
 
         let backArrowOffset: CGFloat = displayedActiveStateOnce ? 0.0 : 15.0
@@ -1829,8 +1884,6 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let imageSize = CGSize(width: imageSide, height: imageSide)
 
         let statusOffset: CGFloat = 20.0
-        let statusMode: CallControllerStatusDisplayMode = incomingVideoNodeValue != nil || outgoingVideoNodeValue != nil ? .compact : .expand
-        statusNode.setDisplayMode(statusMode, transition: transition)
         let statusHeight = self.statusNode.updateLayout(constrainedWidth: layout.size.width, transition: transition)
 
         let imageStatusOffset: CGFloat = 10.0
@@ -1851,11 +1904,15 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let hasVideoNodes = incomingVideoNodeValue != nil || outgoingVideoNodeValue != nil
         let statusFrame: CGRect
         if hasVideoNodes {
-            statusFrame = CGRect(origin: CGPoint(x: 0.0, y: backButtonNode.frame.midY - statusHeight / 2.0), size: CGSize(width: layout.size.width, height: statusHeight))
+            statusFrame = CGRect(origin: CGPoint(x: 0.0, y: topOriginY + navigationHeight), size: CGSize(width: layout.size.width, height: statusHeight))
         } else {
             statusFrame = CGRect(origin: CGPoint(x: 0.0, y: imageFrame.maxY + statusOffset), size: CGSize(width: layout.size.width, height: statusHeight))
         }
         transition.updateFrameAsPositionAndBounds(node: self.statusNode, frame: statusFrame)
+
+        let statusToastSize = statusToastNode.updateLayout(CGSize(width: layout.size.width - 32.0, height: 50.0), transition: transition)
+        let statusToastFrame = CGRect(origin: CGPoint(x: (layout.size.width - statusToastSize.width) / 2.0, y: statusFrame.maxY + 10.0), size: statusToastSize)
+        transition.updateFrameAsPositionAndBounds(node: statusToastNode, frame: statusToastFrame)
 
         let closeAvailableWidth: CGFloat = layout.size.width - 44.0 * 2.0
         let closeHeight: CGFloat = closeContainerNode.updateLayout(CGSize(width: closeAvailableWidth, height: 50.0), transition: .immediate)
@@ -2063,7 +2120,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     @objc func tapGesture(_ recognizer: UITapGestureRecognizer) {
-        updateAnimationsState(paused: false, force: false)
+        updateAnimationsState(paused: false, force: true)
 
         if case .ended = recognizer.state {
             if !self.pictureInPictureTransitionFraction.isZero {
@@ -2272,7 +2329,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     @objc private func panGesture(_ recognizer: CallPanGestureRecognizer) {
-        updateAnimationsState(paused: false, force: false)
+        updateAnimationsState(paused: false, force: true)
 
         switch recognizer.state {
             case .began:
@@ -2403,7 +2460,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        updateAnimationsState(paused: false, force: false)
+        updateAnimationsState(paused: false, force: true)
 
         if self.debugNode != nil {
             return super.hitTest(point, with: event)

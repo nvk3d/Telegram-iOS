@@ -4,10 +4,8 @@ import Display
 import AsyncDisplayKit
 import SwiftSignalKit
 
-private let compactExpandNameFont = Font.regular(22.0)
-private let compactCompactNameFont = Font.semibold(22.0)
-private let regularExpandNameFont = Font.regular(28.0)
-private let regularCompactNameFont = Font.semibold(28.0)
+private let compactNameFont = Font.regular(22.0)
+private let regularNameFont = Font.regular(28.0)
 
 private let compactStatusFont = Font.regular(16.0)
 private let regularStatusFont = Font.regular(16.0)
@@ -126,56 +124,6 @@ enum CallControllerStatusValue: Equatable {
     }
 }
 
-enum CallControllerStatusDisplayMode {
-    case compact
-    case expand
-
-    var scaleTitle: CGFloat {
-        switch self {
-        case .compact:
-            return 0.6
-        case .expand:
-            return 1.0
-        }
-    }
-
-    var scaleStatus: CGFloat {
-        switch self {
-        case .compact:
-            return 0.8
-        case .expand:
-            return 1.0
-        }
-    }
-
-    var spacing: CGFloat {
-        switch self {
-        case .compact:
-            return -5.0
-        case .expand:
-            return 0.0
-        }
-    }
-
-    var compactNameFont: UIFont {
-        switch self {
-        case .compact:
-            return compactCompactNameFont
-        case .expand:
-            return compactExpandNameFont
-        }
-    }
-
-    var regularNameFont: UIFont {
-        switch self {
-        case .compact:
-            return regularCompactNameFont
-        case .expand:
-            return regularExpandNameFont
-        }
-    }
-}
-
 final class CallControllerStatusNode: ASDisplayNode {
     private let titleNode: TextNode
     private let statusContainerNode: ASDisplayNode
@@ -254,7 +202,7 @@ final class CallControllerStatusNode: ASDisplayNode {
         didSet {
             if self.reception != oldValue {
                 if let reception = self.reception {
-                    self.receptionNode.reception = reception
+                    self.receptionNode.update(reception)
                     
                     if oldValue == nil {
                         let transition = ContainedViewLayoutTransition.animated(duration: 0.3, curve: .spring)
@@ -278,8 +226,6 @@ final class CallControllerStatusNode: ASDisplayNode {
     private var beginTimestamp: Double = CFAbsoluteTimeGetCurrent()
     private var endTimestamp: Double?
     private var validLayoutWidth: CGFloat?
-
-    private var displayMode: CallControllerStatusDisplayMode = .expand
     
     override init() {
         self.titleNode = TextNode()
@@ -321,13 +267,6 @@ final class CallControllerStatusNode: ASDisplayNode {
     deinit {
         self.statusTimer?.invalidate()
     }
-
-    func setDisplayMode(_ mode: CallControllerStatusDisplayMode, transition: ContainedViewLayoutTransition) {
-        displayMode = mode
-
-        transition.updateTransformScale(node: titleNode, scale: mode.scaleTitle)
-        transition.updateTransformScale(node: statusContainerNode, scale: mode.scaleStatus)
-    }
     
     func setVisible(_ visible: Bool, transition: ContainedViewLayoutTransition) {
         let alpha: CGFloat = visible ? 1.0 : 0.0
@@ -341,10 +280,10 @@ final class CallControllerStatusNode: ASDisplayNode {
         let nameFont: UIFont
         let statusFont: UIFont
         if constrainedWidth < 330.0 {
-            nameFont = displayMode.compactNameFont
+            nameFont = compactNameFont
             statusFont = compactStatusFont
         } else {
-            nameFont = displayMode.regularNameFont
+            nameFont = regularNameFont
             statusFont = regularStatusFont
         }
         
@@ -374,19 +313,10 @@ final class CallControllerStatusNode: ASDisplayNode {
             let durationString: String = formattedStrings.string
             let measureDurationString: String = formattedStrings.measureString
 
-            let _statusText = format(durationString, false)
-            let _statusMeasureText = format(measureDurationString, true)
-            statusLoading = _statusText.hasSuffix("...")
+            statusText = format(durationString, false)
+            statusMeasureText = format(measureDurationString, true)
 
-            if statusLoading {
-                statusText = _statusText.replacingOccurrences(of: "...", with: "")
-                statusMeasureText = _statusMeasureText.replacingOccurrences(of: "...", with: "")
-                statusOffset -= 7.5
-            } else {
-                statusText = _statusText
-                statusMeasureText = _statusMeasureText
-            }
-            if self.reception != nil, !statusLoading {
+            if self.reception != nil {
                 statusOffset += 8.0
             }
         case let .timestamp(icon):
@@ -404,7 +334,7 @@ final class CallControllerStatusNode: ASDisplayNode {
             }
         }
         
-        let spacing: CGFloat = displayMode.spacing
+        let spacing: CGFloat = -3.0
         let (titleLayout, titleApply) = TextNode.asyncLayout(self.titleNode)(TextNodeLayoutArguments(attributedString: NSAttributedString(string: self.title, font: nameFont, textColor: .white), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: constrainedWidth - 20.0, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets(top: 2.0, left: 2.0, bottom: 2.0, right: 2.0)))
         let (statusMeasureLayout, statusMeasureApply) = TextNode.asyncLayout(self.statusMeasureNode)(TextNodeLayoutArguments(attributedString: NSAttributedString(string: statusMeasureText, font: statusFont, textColor: .white), backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: constrainedWidth - 20.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets(top: 2.0, left: 2.0, bottom: 2.0, right: 2.0)))
         let (statusLayout, statusApply) = TextNode.asyncLayout(self.statusNode)(TextNodeLayoutArguments(attributedString: NSAttributedString(string: statusText, font: statusFont, textColor: .white), backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: constrainedWidth - 20.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets(top: 2.0, left: 2.0, bottom: 2.0, right: 2.0)))
@@ -416,16 +346,13 @@ final class CallControllerStatusNode: ASDisplayNode {
         self.titleActivateAreaNode.accessibilityLabel = self.title
         self.statusActivateAreaNode.accessibilityLabel = statusText
 
-        let titleScaledHeight: CGFloat = titleLayout.size.height * displayMode.scaleTitle
-        let statusScaledHeight: CGFloat = statusLayout.size.height * displayMode.scaleStatus
-
         let immediate: ContainedViewLayoutTransition = .immediate
-        immediate.updatePosition(node: titleNode, position: CGPoint(x: floor(constrainedWidth / 2.0), y: titleScaledHeight / 2.0))
+        immediate.updatePosition(node: titleNode, position: CGPoint(x: floor(constrainedWidth / 2.0), y: titleLayout.size.height / 2.0))
         immediate.updateBounds(node: titleNode, bounds: CGRect(origin: .zero, size: titleLayout.size))
-        immediate.updatePosition(node: statusContainerNode, position: CGPoint(x: constrainedWidth / 2.0, y: titleScaledHeight + spacing + statusScaledHeight / 2.0))
+        immediate.updatePosition(node: statusContainerNode, position: CGPoint(x: constrainedWidth / 2.0, y: titleLayout.size.height + spacing + statusLayout.size.height / 2.0))
         immediate.updateBounds(node: statusContainerNode, bounds: CGRect(origin: .zero, size: CGSize(width: constrainedWidth, height: statusLayout.size.height)))
         self.statusNode.frame = CGRect(origin: CGPoint(x: floor((constrainedWidth - statusMeasureLayout.size.width) / 2.0) + statusOffset, y: 0.0), size: statusLayout.size)
-        self.receptionNode.frame = CGRect(origin: CGPoint(x: self.statusNode.frame.minX - receptionNodeSize.width + 4.0, y: (statusContainerNode.frame.height - receptionNodeSize.height) / 2.0), size: receptionNodeSize)
+        self.receptionNode.frame = CGRect(origin: CGPoint(x: self.statusNode.frame.minX - receptionNodeSize.width + 4.0, y: (statusContainerNode.frame.height - receptionNodeSize.height) / 2.0 - 1.0), size: receptionNodeSize)
 
         self.logoNode.image = statusIcon
         self.logoNode.isHidden = !statusDisplayLogo
@@ -438,7 +365,7 @@ final class CallControllerStatusNode: ASDisplayNode {
             self.logoNode.frame = CGRect(origin: CGPoint(x: self.statusNode.frame.minX + firstLineOffset - imageSize.width, y: (self.statusContainerNode.frame.height - imageSize.height) / 2.0), size: imageSize)
         }
 
-        let loadingSize = self.loadingNode.measure(CGSize(width: constrainedWidth, height: statusScaledHeight))
+        let loadingSize = self.loadingNode.measure(CGSize(width: constrainedWidth, height: statusLayout.size.height))
         let loadingFrame = CGRect(origin: CGPoint(x: statusNode.frame.maxX + 6.0, y: (self.statusContainerNode.frame.height - loadingSize.height) / 2.0), size: loadingSize)
         self.loadingNode.frame = loadingFrame
         loadingNode.updateLayout(loadingSize)
@@ -452,7 +379,7 @@ final class CallControllerStatusNode: ASDisplayNode {
         self.titleActivateAreaNode.frame = self.titleNode.frame
         self.statusActivateAreaNode.frame = self.statusContainerNode.frame
         
-        return titleScaledHeight + spacing + statusScaledHeight
+        return titleLayout.size.height + spacing + statusLayout.size.height
     }
 
     private func formattedTimestamp(_ duration: Int32) -> (string: String, measureString: String) {
@@ -480,48 +407,87 @@ private final class CallControllerReceptionNodeParameters: NSObject {
     }
 }
 
-private let receptionNodeSize = CGSize(width: 24.0, height: 10.0)
+private let receptionNodeSize = CGSize(width: 24.0, height: 12.0)
 
-final class CallControllerReceptionNode : ASDisplayNode {
-    var reception: Int32 = 4 {
-        didSet {
-            self.setNeedsDisplay()
-        }
-    }
+final class CallControllerReceptionNode: ASDisplayNode {
+    // MARK: - Properties
+
+    private var reception: Int32 = 4
+
+    // MARK: - Layers
+
+    private let lines: [CALayer]
+
+    // MARK: - Init
     
     override init() {
+        lines = [CALayer(), CALayer(), CALayer(), CALayer()]
+
         super.init()
-        
-        self.isOpaque = false
-        self.isLayerBacked = true
+
+        for line in lines {
+            line.backgroundColor = UIColor.white.cgColor
+            line.cornerRadius = 1.0
+            line.anchorPoint = CGPoint(x: 0.5, y: 1.0)
+            layer.addSublayer(line)
+        }
     }
-    
-    override func drawParameters(forAsyncLayer layer: _ASDisplayLayer) -> NSObjectProtocol? {
-        return CallControllerReceptionNodeParameters(reception: self.reception)
-    }
-    
-    @objc override class func draw(_ bounds: CGRect, withParameters parameters: Any?, isCancelled: () -> Bool, isRasterizing: Bool) {
-        let context = UIGraphicsGetCurrentContext()!
-        context.setFillColor(UIColor.white.cgColor)
-        
-        if let parameters = parameters as? CallControllerReceptionNodeParameters{
-            let width: CGFloat = 3.0
-            var spacing: CGFloat = 1.5
-            if UIScreenScale > 2 {
-                spacing = 4.0 / 3.0
-            }
-            
-            for i in 0 ..< 4 {
-                let height = 4.0 + 2.0 * CGFloat(i)
-                let rect = CGRect(x: bounds.minX + CGFloat(i) * (width + spacing), y: receptionNodeSize.height - height, width: width, height: height)
-                
-                if i >= parameters.reception {
-                    context.setAlpha(0.4)
+
+    // MARK: - Interface
+
+    func update(_ reception: Int32) {
+        print("-- reception update: \(reception), old: \(self.reception)")
+        let oldReception = self.reception
+        self.reception = reception
+
+        let width: CGFloat = 3.0
+        let spacing: CGFloat = 2.0
+
+        let range = reception < oldReception ? (0 ... lines.count - 1).reversed() : Array(0 ... lines.count - 1)
+        var delay: CGFloat = 0.0
+
+        let currentTime = CACurrentMediaTime()
+
+        for i in range {
+            let line = lines[i]
+
+            let oldActive = i < oldReception
+            let active = i < reception
+
+            let height = 3.0 + 3.0 * CGFloat(i)
+            let rect = CGRect(x: bounds.minX + CGFloat(i) * (width + spacing), y: receptionNodeSize.height - height, width: width, height: height)
+
+            line.frame = rect
+            let nextOpacity: Float = active ? 1.0 : 0.3
+
+            if oldActive != active {
+                let scaleFromValue: CGFloat
+                if line.animation(forKey: "transform.scale") != nil {
+                    let t = line.presentation()?.transform ?? line.transform
+                    scaleFromValue = t.m22
+                } else {
+                    scaleFromValue = 1.0
                 }
-                
-                let path = UIBezierPath(roundedRect: rect, cornerRadius: 0.5)
-                context.addPath(path.cgPath)
-                context.fillPath()
+
+                let scale = CAKeyframeAnimation(keyPath: "transform.scale.y")
+                scale.values = [scaleFromValue, 1.15, 1.0]
+                scale.keyTimes = [0.0, 0.4, 1.0]
+                scale.duration = 0.25
+                scale.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                scale.beginTime = layer.convertTime(currentTime, from: nil) + delay * UIView.animationDurationFactor()
+                line.add(scale, forKey: "transform.scale")
+
+                let opacityFromValue = line.presentation()?.opacity ?? line.opacity
+                let opacity = CABasicAnimation(keyPath: "opacity")
+                opacity.fromValue = NSNumber(value: Float(opacityFromValue))
+                opacity.toValue = NSNumber(value: nextOpacity)
+                opacity.duration = 0.15
+                opacity.beginTime = layer.convertTime(currentTime, to: nil) + delay * UIView.animationDurationFactor()
+                opacity.fillMode = .both
+                opacity.isRemovedOnCompletion = false
+                line.add(opacity, forKey: "opacity")
+
+                delay += 0.1
             }
         }
     }
