@@ -428,7 +428,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private var expandedVideoNode: CallVideoNode?
     private var minimizedVideoNode: CallVideoNode?
     private var disableAnimationForExpandedVideoOnce: Bool = false
-    private var animationForExpandedVideoSnapshotView: UIView? = nil
+    private var animationSnapshotExpandedView: UIView? = nil
+    private var animationSnapshotMinimizedView: UIView? = nil
     
     private var outgoingVideoNodeCorner: VideoNodeCorner = .bottomRight
     private let backButtonArrowNode: ASImageNode
@@ -453,6 +454,10 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
 
     private var displayedActiveStateOnce: Bool = false
     private var displayedVersionOutdatedAlert: Bool = false
+
+    private var animationSnapshotExist: Bool {
+        animationSnapshotMinimizedView != nil || animationSnapshotExpandedView != nil
+    }
     
     var isMuted: Bool = false {
         didSet {
@@ -1230,12 +1235,18 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             }
         }
 
-        if case .active = callState.state {
-            if !isAnimationsPaused, animationsPauseTimer == nil {
-                updateAnimationsState(paused: true, force: false)
+        if !hasVideoNodes {
+            if removedExpandedVideoNodeValue != nil || removedMinimizedVideoNodeValue != nil {
+                updateAnimationsState(paused: false, force: false)
+            } else if case .active = callState.state {
+                if !isAnimationsPaused, animationsPauseTimer == nil {
+                    updateAnimationsState(paused: true, force: false)
+                }
+            } else {
+                updateAnimationsState(paused: false, force: true)
             }
-        } else {
-            updateAnimationsState(paused: false, force: true)
+        } else if !isAnimationsPaused {
+            updateAnimationsState(paused: true, force: true)
         }
 
         if let statusTitle = statusTitle {
@@ -1282,11 +1293,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 let transition: ContainedViewLayoutTransition = .animated(duration: 0.5, curve: .spring)
                 transition.updateAlpha(node: self.ratingNode, alpha: 1.0)
 
-                let animation = CAKeyframeAnimation(keyPath: "transform.scale")
-                animation.values = [Float(0.85), Float(1.05), Float(1.0)]
-                animation.keyTimes = [0.0, 0.9, 1.0]
-                animation.duration = 0.3
-                animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                let animation = ratingNode.layer.springAnimation(from: 0.85 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: 0.5)
                 self.ratingNode.layer.add(animation, forKey: "transform.scale")
 
                 self.closeContainerNode.alpha = 1.0
@@ -1688,42 +1695,43 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private func calculatePreviewVideoRect(layout: ContainerViewLayout, navigationHeight: CGFloat) -> CGRect {
         let buttonsHeight: CGFloat = self.buttonsNode.bounds.height
         let toastHeight: CGFloat = self.toastNode.bounds.height
-        let toastInset = (toastHeight > 0.0 ? toastHeight + 22.0 : 0.0)
+        let toastInset = (toastHeight > 0.0 ? toastHeight + 16.0 : 0.0)
         
         var fullInsets = layout.insets(options: .statusBar)
     
         var cleanInsets = fullInsets
         cleanInsets.bottom = max(layout.intrinsicInsets.bottom, 20.0) + toastInset
-        cleanInsets.left = 20.0
-        cleanInsets.right = 20.0
+        cleanInsets.left = 10.0
+        cleanInsets.right = 10.0
         
         fullInsets.top += 44.0 + 8.0
-        fullInsets.bottom = buttonsHeight + 22.0 + toastInset
-        fullInsets.left = 20.0
-        fullInsets.right = 20.0
+        fullInsets.bottom = buttonsHeight + 16.0 + toastInset
+        fullInsets.left = 10.0
+        fullInsets.right = 10.0
         
         var insets: UIEdgeInsets = self.isUIHidden ? cleanInsets : fullInsets
         
-        let expandedInset: CGFloat = 16.0
+        let expandedInset: CGFloat = 6.0
         
         insets.top = interpolate(from: expandedInset, to: insets.top, value: 1.0 - self.pictureInPictureTransitionFraction)
         insets.bottom = interpolate(from: expandedInset, to: insets.bottom, value: 1.0 - self.pictureInPictureTransitionFraction)
         insets.left = interpolate(from: expandedInset, to: insets.left, value: 1.0 - self.pictureInPictureTransitionFraction)
         insets.right = interpolate(from: expandedInset, to: insets.right, value: 1.0 - self.pictureInPictureTransitionFraction)
-        
-        let previewVideoSide = interpolate(from: 300.0, to: 150.0, value: 1.0 - self.pictureInPictureTransitionFraction)
+
+        let previewScale: CGFloat = !isUIHidden ? 1.0 : (14.0 / 24.0)
+        let previewVideoSide = interpolate(from: 300.0, to: (240.0 / 393.0) * layout.size.width * previewScale, value: 1.0 - self.pictureInPictureTransitionFraction)
         var previewVideoSize = layout.size.aspectFitted(CGSize(width: previewVideoSide, height: previewVideoSide))
-        previewVideoSize = CGSize(width: 30.0, height: 45.0).aspectFitted(previewVideoSize)
+        previewVideoSize = CGSize(width: 30.0, height: 52.0).aspectFitted(previewVideoSize)
         if let minimizedVideoNode = self.minimizedVideoNode {
             var aspect = minimizedVideoNode.currentAspect
             var rotationCount = 0
             if minimizedVideoNode === self.outgoingVideoNodeValue {
-                aspect = 3.0 / 4.0
+                aspect = 9.0 / 16.0
             } else {
                 if aspect < 1.0 {
-                    aspect = 3.0 / 4.0
+                    aspect = 9.0 / 16.0
                 } else {
-                    aspect = 4.0 / 3.0
+                    aspect = 16.0 / 9.0
                 }
                 
                 switch minimizedVideoNode.currentOrientation {
@@ -1961,8 +1969,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             self.removedMinimizedVideoNodeValue = nil
             
             if transition.isAnimated {
-                removedMinimizedVideoNodeValue.layer.animateScale(from: 1.0, to: 0.1, duration: 0.3, removeOnCompletion: false)
-                removedMinimizedVideoNodeValue.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak removedMinimizedVideoNodeValue] _ in
+                removedMinimizedVideoNodeValue.layer.animateScale(from: 1.0, to: 0.8, duration: 0.2, removeOnCompletion: false)
+                removedMinimizedVideoNodeValue.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak removedMinimizedVideoNodeValue] _ in
                     removedMinimizedVideoNodeValue?.removeFromSupernode()
                 })
             } else {
@@ -1973,8 +1981,11 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         if let expandedVideoNode = self.expandedVideoNode {
             transition.updateAlpha(node: expandedVideoNode, alpha: 1.0)
             var expandedVideoTransition = transition
+            var animateExpandedVideoNode: Bool = false
+
             if expandedVideoNode.frame.isEmpty || self.disableAnimationForExpandedVideoOnce {
                 expandedVideoTransition = .immediate
+                animateExpandedVideoNode = minimizedVideoNode == nil
                 self.disableAnimationForExpandedVideoOnce = false
             }
             
@@ -1990,7 +2001,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             
             expandedVideoNode.updateLayout(size: expandedVideoNode.frame.size, cornerRadius: 0.0, isOutgoing: expandedVideoNode === self.outgoingVideoNodeValue, deviceOrientation: mappedDeviceOrientation, isCompactLayout: isCompactLayout, transition: expandedVideoTransition)
             
-            if self.animateRequestedVideoOnce {
+            if self.animateRequestedVideoOnce, animateExpandedVideoNode {
                 self.animateRequestedVideoOnce = false
                 if expandedVideoNode === self.outgoingVideoNodeValue {
                     let videoButtonFrame = self.buttonsNode.videoButtonFrame().flatMap { frame -> CGRect in
@@ -2003,6 +2014,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 } else if expandedVideoNode === self.incomingVideoNodeValue {
                     expandedVideoNode.animateRoundedRect(from: imageFrame, fromCornerRadius: imageSide / 2.0, to: fullscreenVideoFrame, toCornerRadius: layout.deviceMetrics.screenCornerRadius)
                 }
+            } else {
+                self.animateRequestedVideoOnce = false
             }
         } else if let removedExpandedVideoNodeValue = self.removedExpandedVideoNodeValue {
             self.removedExpandedVideoNodeValue = nil
@@ -2023,29 +2036,42 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             transition.updateAlpha(node: minimizedVideoNode, alpha: min(pipTransitionAlpha, pinchTransitionAlpha))
             var minimizedVideoTransition = transition
             var didAppear = false
-            if minimizedVideoNode.frame.isEmpty {
+            if minimizedVideoNode.frame.isEmpty || self.animationSnapshotExist {
                 minimizedVideoTransition = .immediate
                 didAppear = true
             }
             if self.minimizedVideoDraggingPosition == nil {
-                if let animationForExpandedVideoSnapshotView = self.animationForExpandedVideoSnapshotView {
-                    self.containerNode.view.addSubview(animationForExpandedVideoSnapshotView)
-                    transition.updateAlpha(layer: animationForExpandedVideoSnapshotView.layer, alpha: 0.0, completion: { [weak animationForExpandedVideoSnapshotView] _ in
-                        animationForExpandedVideoSnapshotView?.removeFromSuperview()
+                var needBounceAnimation: Bool = false
+                if let animationSnapshotMinimizedView = self.animationSnapshotMinimizedView {
+                    self.videoContainerNode.contentNode.view.addSubview(animationSnapshotMinimizedView)
+                    transition.updateAlpha(layer: animationSnapshotMinimizedView.layer, alpha: 0.0, completion: { [weak animationSnapshotMinimizedView] _ in
+                        animationSnapshotMinimizedView?.removeFromSuperview()
                     })
-                    transition.updateTransformScale(layer: animationForExpandedVideoSnapshotView.layer, scale: previewVideoFrame.width / fullscreenVideoFrame.width)
-                    
-                    transition.updatePosition(layer: animationForExpandedVideoSnapshotView.layer, position: CGPoint(x: previewVideoFrame.minX + previewVideoFrame.center.x /  fullscreenVideoFrame.width * previewVideoFrame.width, y: previewVideoFrame.minY + previewVideoFrame.center.y / fullscreenVideoFrame.height * previewVideoFrame.height))
-                    self.animationForExpandedVideoSnapshotView = nil
+
+                    minimizedVideoNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
+                    needBounceAnimation = true
+                }
+                if let animationSnapshotExpandedView = animationSnapshotExpandedView, let expandedVideoNode = expandedVideoNode {
+                    self.videoContainerNode.contentNode.view.insertSubview(animationSnapshotExpandedView, aboveSubview: expandedVideoNode.view)
+                    transition.updateAlpha(layer: animationSnapshotExpandedView.layer, alpha: 0.0) { [weak animationSnapshotExpandedView] _ in
+                        animationSnapshotExpandedView?.removeFromSuperview()
+                    }
+                    needBounceAnimation = true
                 }
                 minimizedVideoTransition.updateFrame(node: minimizedVideoNode, frame: previewVideoFrame)
                 minimizedVideoNode.updateLayout(size: previewVideoFrame.size, cornerRadius: interpolate(from: 14.0, to: 24.0, value: self.pictureInPictureTransitionFraction), isOutgoing: minimizedVideoNode === self.outgoingVideoNodeValue, deviceOrientation: mappedDeviceOrientation, isCompactLayout: layout.metrics.widthClass == .compact, transition: minimizedVideoTransition)
-                if transition.isAnimated && didAppear {
-                    minimizedVideoNode.layer.animateSpring(from: 0.1 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: 0.5)
+                if transition.isAnimated && didAppear && needBounceAnimation {
+                    let animation = CAKeyframeAnimation(keyPath: "transform.scale")
+                    animation.duration = 0.2
+                    animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    animation.values = [1.0, 0.9, 1.0]
+                    minimizedVideoNode.layer.add(animation, forKey: "transform.scale")
+                    animationSnapshotMinimizedView?.layer.add(animation, forKey: "transform.scale")
                 }
             }
-            
-            self.animationForExpandedVideoSnapshotView = nil
+
+            self.animationSnapshotMinimizedView = nil
+            self.animationSnapshotExpandedView = nil
         }
         
         let keyTextSize = self.keyButtonNode.frame.size
@@ -2145,8 +2171,6 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     @objc func tapGesture(_ recognizer: UITapGestureRecognizer) {
-        updateAnimationsState(paused: false, force: true)
-
         if case .ended = recognizer.state {
             if !self.pictureInPictureTransitionFraction.isZero {
                 self.view.window?.endEditing(true)
@@ -2163,8 +2187,12 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                     let point = recognizer.location(in: recognizer.view)
                     if let expandedVideoNode = self.expandedVideoNode, let minimizedVideoNode = self.minimizedVideoNode, minimizedVideoNode.frame.contains(point) {
                         if !self.areUserActionsDisabledNow() {
-                            let copyView = minimizedVideoNode.view.snapshotView(afterScreenUpdates: false)
-                            copyView?.frame = minimizedVideoNode.frame
+                            let minimizedCopyView = minimizedVideoNode.view.snapshotView(afterScreenUpdates: false)
+                            minimizedCopyView?.frame = minimizedVideoNode.frame
+
+                            let expandedCopyView = expandedVideoNode.view.snapshotView(afterScreenUpdates: false)
+                            expandedCopyView?.frame = expandedVideoNode.frame
+
                             self.expandedVideoNode = minimizedVideoNode
                             self.minimizedVideoNode = expandedVideoNode
                             if let supernode = expandedVideoNode.supernode {
@@ -2173,7 +2201,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                             self.disableActionsUntilTimestamp = CACurrentMediaTime() + 0.3
                             if let (layout, navigationBarHeight) = self.validLayout {
                                 self.disableAnimationForExpandedVideoOnce = true
-                                self.animationForExpandedVideoSnapshotView = copyView
+                                self.animationSnapshotMinimizedView = minimizedCopyView
+                                self.animationSnapshotExpandedView = expandedCopyView
                                 self.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .animated(duration: 0.3, curve: .easeInOut))
                             }
                         }
@@ -2354,8 +2383,6 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     @objc private func panGesture(_ recognizer: CallPanGestureRecognizer) {
-        updateAnimationsState(paused: false, force: true)
-
         switch recognizer.state {
             case .began:
                 guard let location = recognizer.firstLocation else {
@@ -2485,7 +2512,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     }
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        updateAnimationsState(paused: false, force: true)
+        if let event = event, event.type == .touches, !hasVideoNodes {
+            updateAnimationsState(paused: false, force: true)
+        }
 
         if self.debugNode != nil {
             return super.hitTest(point, with: event)
