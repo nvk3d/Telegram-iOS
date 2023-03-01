@@ -184,6 +184,26 @@ private final class CallVideoNode: ASDisplayNode, PreviewVideoNode {
             self?.layer.mask = nil
         })
     }
+
+    func animateRoundedRect(from fromRect: CGRect, fromCornerRadius: CGFloat, to toRect: CGRect, toCornerRadius: CGFloat, completion: (() -> Void)? = nil) {
+        let maskLayer = CAShapeLayer()
+        maskLayer.frame = bounds
+
+        let path = CGMutablePath()
+        path.addRoundedRect(in: fromRect, cornerWidth: fromCornerRadius, cornerHeight: fromCornerRadius)
+        maskLayer.path = path
+
+        self.layer.mask = maskLayer
+
+        let toPath = CGMutablePath()
+        toPath.addRoundedRect(in: toRect, cornerWidth: toCornerRadius, cornerHeight: toCornerRadius)
+
+        let transition: ContainedViewLayoutTransition = .animated(duration: 0.3, curve: .easeInOut)
+        transition.updatePath(layer: maskLayer, path: toPath) { [weak self] _ in
+            self?.layer.mask = nil
+            completion?()
+        }
+    }
     
     func updateLayout(size: CGSize, layoutMode: VideoNodeLayoutMode, transition: ContainedViewLayoutTransition) {
         self.updateLayout(size: size, cornerRadius: self.currentCornerRadius, isOutgoing: true, deviceOrientation: .portrait, isCompactLayout: false, transition: transition)
@@ -927,6 +947,10 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                                 return
                             }
                             strongSelf.candidateIncomingVideoNodeValue = nil
+
+                            if strongSelf.incomingVideoViewRequested {
+                                strongSelf.animateRequestedVideoOnce = true
+                            }
                             
                             strongSelf.incomingVideoNodeValue = incomingVideoNode
                             if let expandedVideoNode = strongSelf.expandedVideoNode {
@@ -1976,20 +2000,21 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                     if let previousVideoButtonFrame = previousVideoButtonFrame, let videoButtonFrame = videoButtonFrame {
                         expandedVideoNode.animateRadialMask(from: previousVideoButtonFrame, to: videoButtonFrame)
                     }
+                } else if expandedVideoNode === self.incomingVideoNodeValue {
+                    expandedVideoNode.animateRoundedRect(from: imageFrame, fromCornerRadius: imageSide / 2.0, to: fullscreenVideoFrame, toCornerRadius: layout.deviceMetrics.screenCornerRadius)
                 }
             }
-        } else {
-            if let removedExpandedVideoNodeValue = self.removedExpandedVideoNodeValue {
-                self.removedExpandedVideoNodeValue = nil
-                
-                if transition.isAnimated {
-                    removedExpandedVideoNodeValue.layer.animateScale(from: 1.0, to: 0.1, duration: 0.3, removeOnCompletion: false)
-                    removedExpandedVideoNodeValue.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { [weak removedExpandedVideoNodeValue] _ in
-                        removedExpandedVideoNodeValue?.removeFromSupernode()
-                    })
-                } else {
-                    removedExpandedVideoNodeValue.removeFromSupernode()
+        } else if let removedExpandedVideoNodeValue = self.removedExpandedVideoNodeValue {
+            self.removedExpandedVideoNodeValue = nil
+
+            if transition.isAnimated {
+                imageNode.layer.animateScale(from: 1.3, to: 1.0, duration: 0.1, delay: 0.2, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue)
+                removedExpandedVideoNodeValue.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.1, delay: 0.2, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false)
+                removedExpandedVideoNodeValue.animateRoundedRect(from: fullscreenVideoFrame, fromCornerRadius: layout.deviceMetrics.screenCornerRadius, to: imageFrame, toCornerRadius: imageSide / 2.0) { [weak removedExpandedVideoNodeValue] in
+                    removedExpandedVideoNodeValue?.removeFromSupernode()
                 }
+            } else {
+                removedExpandedVideoNodeValue.removeFromSupernode()
             }
         }
         
