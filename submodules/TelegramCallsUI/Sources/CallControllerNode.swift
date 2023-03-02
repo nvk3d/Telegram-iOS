@@ -1733,7 +1733,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     
     private func calculatePreviewVideoRect(layout: ContainerViewLayout, navigationHeight: CGFloat, temporaryMinimizedNode: CallVideoNode? = nil) -> CGRect {
         let buttonsHeight: CGFloat = self.buttonsNode.bounds.height
-        let toastHeight: CGFloat = self.toastNode.bounds.height
+        let toastHeight: CGFloat = toastNode.apparentHeight //self.toastNode.bounds.height
         let toastInset = (toastHeight > 0.0 ? toastHeight + 16.0 : 0.0)
         
         var fullInsets = layout.insets(options: .statusBar)
@@ -1750,12 +1750,13 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         var insets: UIEdgeInsets = self.isUIHidden ? cleanInsets : fullInsets
         
-        let expandedInset: CGFloat = 6.0
+        let expandedSideInset: CGFloat = 6.0
+        let expandedVerticalInset: CGFloat = 16.0
         
-        insets.top = interpolate(from: expandedInset, to: insets.top, value: 1.0 - self.pictureInPictureTransitionFraction)
-        insets.bottom = interpolate(from: expandedInset, to: insets.bottom, value: 1.0 - self.pictureInPictureTransitionFraction)
-        insets.left = interpolate(from: expandedInset, to: insets.left, value: 1.0 - self.pictureInPictureTransitionFraction)
-        insets.right = interpolate(from: expandedInset, to: insets.right, value: 1.0 - self.pictureInPictureTransitionFraction)
+        insets.top = interpolate(from: expandedVerticalInset, to: insets.top, value: 1.0 - self.pictureInPictureTransitionFraction)
+        insets.bottom = interpolate(from: expandedVerticalInset, to: insets.bottom, value: 1.0 - self.pictureInPictureTransitionFraction)
+        insets.left = interpolate(from: expandedSideInset, to: insets.left, value: 1.0 - self.pictureInPictureTransitionFraction)
+        insets.right = interpolate(from: expandedSideInset, to: insets.right, value: 1.0 - self.pictureInPictureTransitionFraction)
 
         let previewScale: CGFloat = !isUIHidden ? 1.0 : (14.0 / 24.0)
         let previewVideoSide = interpolate(from: 300.0, to: (240.0 / 393.0) * layout.size.width * previewScale, value: 1.0 - self.pictureInPictureTransitionFraction)
@@ -1887,9 +1888,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         let toastHeight = self.toastNode.updateLayout(strings: self.presentationData.strings, content: self.toastContent, constrainedWidth: layout.size.width, bottomInset: layout.intrinsicInsets.bottom + buttonsHeight, transition: transition)
         
-        let toastSpacing: CGFloat = 22.0
-        let toastCollapsedOriginY = self.pictureInPictureTransitionFraction > 0.0 ? layout.size.height : layout.size.height - max(layout.intrinsicInsets.bottom, 20.0) - toastHeight
-        let toastOriginY = interpolate(from: toastCollapsedOriginY, to: defaultButtonsOriginY - toastSpacing - toastHeight, value: uiDisplayTransition)
+        let toastSpacing: CGFloat = 16.0
+        let toastCollapsedOriginY = self.pictureInPictureTransitionFraction > 0.0 ? layout.size.height : layout.size.height - max(layout.intrinsicInsets.bottom, 20.0) - toastHeight.original
+        let toastOriginY = interpolate(from: toastCollapsedOriginY, to: defaultButtonsOriginY - toastSpacing - toastHeight.original, value: uiDisplayTransition)
 
         let topPanelTransition: ContainedViewLayoutTransition
         if case .active = callState?.state, !displayedActiveStateOnce {
@@ -1998,7 +1999,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let ratingFrame = CGRect(origin: CGPoint(x: 44.0, y: closeFrame.minY - ratingOffset - ratingHeight), size: CGSize(width: ratingAvailableWidth, height: ratingHeight))
         transition.updateFrameAsPositionAndBounds(node: self.ratingNode, frame: ratingFrame)
         
-        transition.updateFrame(node: self.toastNode, frame: CGRect(origin: CGPoint(x: 0.0, y: toastOriginY), size: CGSize(width: layout.size.width, height: toastHeight)))
+        transition.updateFrame(node: self.toastNode, frame: CGRect(origin: CGPoint(x: 0.0, y: toastOriginY), size: CGSize(width: layout.size.width, height: toastHeight.original)))
         transition.updateFrame(node: self.buttonsNode, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonsOriginY), size: CGSize(width: layout.size.width, height: buttonsHeight)))
         transition.updateAlpha(node: self.buttonsNode, alpha: overlayAlpha)
         
