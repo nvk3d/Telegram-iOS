@@ -410,7 +410,7 @@ final class CallControllerButtonItemNode: HighlightTrackingButtonNode {
             self.textNode.attributedText = NSAttributedString(string: text, font: labelFont, textColor: .white)
         }
         let textSize = self.textNode.updateLayout(CGSize(width: 150.0, height: 100.0))
-        let textFrame = CGRect(origin: CGPoint(x: floor((size.width - textSize.width) / 2.0), y: size.height + (isSmall ? 5.0 : 8.0)), size: textSize)
+        let textFrame = CGRect(origin: CGPoint(x: floor((size.width - textSize.width) / 2.0), y: size.height + (isSmall ? 4.0 : 8.0)), size: textSize)
         if self.currentText.isEmpty {
             self.textNode.frame = textFrame
             if transition.isAnimated {

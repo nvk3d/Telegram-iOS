@@ -1867,7 +1867,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         let buttonsHeight: CGFloat
         if let buttonsMode = self.buttonsMode {
-            buttonsHeight = self.buttonsNode.updateLayout(strings: self.presentationData.strings, mode: buttonsMode, constrainedWidth: layout.size.width, bottomInset: layout.intrinsicInsets.bottom, transition: transition)
+            buttonsHeight = self.buttonsNode.updateLayout(strings: self.presentationData.strings, mode: buttonsMode, constrainedWidth: layout.size.width, bottomInset: layout.intrinsicInsets.bottom + 34.0, transition: transition)
         } else {
             buttonsHeight = 0.0
         }
@@ -1978,7 +1978,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
 
         let closeAvailableWidth: CGFloat = layout.size.width - 44.0 * 2.0
         let closeHeight: CGFloat = closeContainerNode.updateLayout(CGSize(width: closeAvailableWidth, height: 50.0), transition: .immediate)
-        let closeOriginY: CGFloat = layout.size.height - (max(layout.intrinsicInsets.bottom + 19.0, 46.0) + closeHeight + 5.0)
+        let closeOriginY: CGFloat = defaultButtonsOriginY + 3.0
         let closeFrame = CGRect(origin: CGPoint(x: 44.0, y: closeOriginY), size: CGSize(width: closeAvailableWidth, height: closeHeight))
         transition.updateFrame(node: closeContainerNode, frame: closeFrame)
 
