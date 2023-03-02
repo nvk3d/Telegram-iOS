@@ -19,6 +19,7 @@ final class CallControllerBackgroundNode: ASDisplayNode {
     private(set) var state: State = .connecting
 
     private var animateWhenReady: Bool = false
+    private var animationInProgress: Bool = false
     private var validSize: CGSize?
 
     private var needColorsUpdating: Bool = false
@@ -97,9 +98,13 @@ final class CallControllerBackgroundNode: ASDisplayNode {
 
     private func animateEvent(transition: ContainedViewLayoutTransition = .animated(duration: 0.7, curve: .linear), extendAnimation: Bool = false) {
         guard validSize != nil else { return }
+        guard !animationInProgress else { return }
 
+        animationInProgress = true
         gradientNode.animateEvent(transition: transition, extendAnimation: extendAnimation, backwards: false) { [weak self] in
             guard let self = self else { return }
+            self.animationInProgress = false
+
             guard self.isAnimating else { return }
 
             if self.needColorsUpdating {
