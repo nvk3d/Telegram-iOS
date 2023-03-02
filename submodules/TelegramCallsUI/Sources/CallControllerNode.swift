@@ -1476,7 +1476,17 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
 
         let transition: ContainedViewLayoutTransition = .animated(duration: 0.3, curve: .spring)
         transition.updateAlpha(node: statusToastNode, alpha: displayStatusToast ? 1.0 : 0.0)
-        statusToastNode.layer.animateScale(from: displayStatusToast ? 0.9 : 1.0, to: displayStatusToast ? 1.0 : 0.9, duration: 0.3, timingFunction: ContainedViewLayoutTransitionCurve.spring.timingFunction)
+
+        if displayStatusToast {
+            let animation = CAKeyframeAnimation(keyPath: "transform.scale")
+            animation.values = [Float(0.8), Float(1.05), Float(1.0)]
+            animation.keyTimes = [0.0, 0.75, 1.0]
+            animation.duration = 0.25
+            animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            statusToastNode.layer.add(animation, forKey: "transform.scale")
+        } else {
+            statusToastNode.layer.animateScale(from: 1.0, to: 0.9, duration: 0.3, timingFunction: ContainedViewLayoutTransitionCurve.spring.timingFunction)
+        }
     }
     
     private func updateToastContent() {
