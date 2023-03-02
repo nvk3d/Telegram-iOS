@@ -1044,4 +1044,8 @@ public final class PresentationCallImpl: PresentationCall {
         self.useFrontCamera = !self.useFrontCamera
         self.videoCapturer?.switchVideoInput(isFront: self.useFrontCamera)
     }
+
+    public func invalidateSwitchingVideoCamera() {
+        self.useFrontCamera = true
+    }
 }

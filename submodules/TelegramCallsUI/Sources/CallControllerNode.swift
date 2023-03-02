@@ -27,7 +27,7 @@ private func interpolate(from: CGFloat, to: CGFloat, value: CGFloat) -> CGFloat 
     return (1.0 - value) * from + value * to
 }
 
-private final class CallVideoNode: ASDisplayNode, PreviewVideoNode {
+private final class CallVideoNode: ASDisplayNode, CallPreviewVideoNode {
     private let videoTransformContainer: ASDisplayNode
     private let videoView: PresentationCallVideoView
     
@@ -203,10 +203,6 @@ private final class CallVideoNode: ASDisplayNode, PreviewVideoNode {
             self?.layer.mask = nil
             completion?()
         }
-    }
-    
-    func updateLayout(size: CGSize, layoutMode: VideoNodeLayoutMode, transition: ContainedViewLayoutTransition) {
-        self.updateLayout(size: size, cornerRadius: self.currentCornerRadius, isOutgoing: true, deviceOrientation: .portrait, isCompactLayout: false, transition: transition)
     }
     
     func updateLayout(size: CGSize, cornerRadius: CGFloat, isOutgoing: Bool, deviceOrientation: UIDeviceOrientation, isCompactLayout: Bool, transition: ContainedViewLayoutTransition) {
@@ -680,7 +676,11 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                             }
                             strongSelf.call.requestVideo()
                         }
-                        
+
+                        if let call = strongSelf.call as? PresentationCallImpl {
+                            call.invalidateSwitchingVideoCamera()
+                        }
+
                         strongSelf.call.makeOutgoingVideoView(completion: { [weak self] outgoingVideoView in
                             guard let strongSelf = self else {
                                 return
@@ -708,14 +708,43 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                                     }
                                     updateLayoutImpl?(layout, navigationBarHeight)
                                 })
-                                
-                                let controller = VoiceChatCameraPreviewController(sharedContext: strongSelf.sharedContext, cameraNode: outgoingVideoNode, shareCamera: { _, _ in
-                                    proceed()
-                                }, switchCamera: { [weak self] in
-                                    Queue.mainQueue().after(0.1) {
-                                        self?.call.switchVideoCamera()
+
+                                let videoButtonConvertedFrame = strongSelf.buttonsNode.videoButtonFrame().flatMap { strongSelf.buttonsNode.view.convert($0, to: strongSelf.view) } ?? .zero
+                                let fromRectSize = CGSize(width: 1.0, height: 1.0)
+                                let fromRect = CGRect(
+                                    x: videoButtonConvertedFrame.minX + (videoButtonConvertedFrame.width - fromRectSize.width) / 2.0,
+                                    y: videoButtonConvertedFrame.minY + (videoButtonConvertedFrame.height - fromRectSize.height) / 2.0,
+                                    width: fromRectSize.width,
+                                    height: fromRectSize.height
+                                )
+
+                                strongSelf.isRequestingVideo = true
+                                strongSelf.updateButtonsMode()
+
+                                let controller = CallCameraPreviewController(
+                                    fromRect: fromRect,
+                                    sharedContext: strongSelf.sharedContext,
+                                    cameraNode: outgoingVideoNode,
+                                    requestEndFrame: { [weak self, weak outgoingVideoNode] in
+                                        guard let self = self else { return nil }
+                                        guard let layout = self.validLayout else { return nil }
+                                        guard self.expandedVideoNode != nil else { return nil }
+
+                                        return self.calculatePreviewVideoRect(layout: layout.0, navigationHeight: layout.1, temporaryMinimizedNode: outgoingVideoNode)
+                                    },
+                                    shareCamera: { _, _ in
+                                        proceed()
+                                    },
+                                    switchCamera: { [weak self] in
+                                        Queue.mainQueue().after(0.1) {
+                                            self?.call.switchVideoCamera()
+                                        }
+                                    },
+                                    cancel: { [weak self] in
+                                        self?.isRequestingVideo = false
+                                        self?.updateButtonsMode()
                                     }
-                                })
+                                )
                                 strongSelf.present?(controller)
                                 
                                 updateLayoutImpl = { [weak controller] layout, navigationBarHeight in
@@ -1692,7 +1721,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         }
     }
     
-    private func calculatePreviewVideoRect(layout: ContainerViewLayout, navigationHeight: CGFloat) -> CGRect {
+    private func calculatePreviewVideoRect(layout: ContainerViewLayout, navigationHeight: CGFloat, temporaryMinimizedNode: CallVideoNode? = nil) -> CGRect {
         let buttonsHeight: CGFloat = self.buttonsNode.bounds.height
         let toastHeight: CGFloat = self.toastNode.bounds.height
         let toastInset = (toastHeight > 0.0 ? toastHeight + 16.0 : 0.0)
@@ -1722,7 +1751,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let previewVideoSide = interpolate(from: 300.0, to: (240.0 / 393.0) * layout.size.width * previewScale, value: 1.0 - self.pictureInPictureTransitionFraction)
         var previewVideoSize = layout.size.aspectFitted(CGSize(width: previewVideoSide, height: previewVideoSide))
         previewVideoSize = CGSize(width: 30.0, height: 52.0).aspectFitted(previewVideoSize)
-        if let minimizedVideoNode = self.minimizedVideoNode {
+
+        if let minimizedVideoNode = temporaryMinimizedNode ?? self.minimizedVideoNode {
             var aspect = minimizedVideoNode.currentAspect
             var rotationCount = 0
             if minimizedVideoNode === self.outgoingVideoNodeValue {
