@@ -392,6 +392,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private let containerTransformationNode: ASDisplayNode
     private let containerNode: ASDisplayNode
     private let videoContainerNode: PinchSourceContainerNode
+    private let videoContainerTopGradientLayer: CAGradientLayer
+    private let videoContainerBottomGradientLayer: CAGradientLayer
 
     private let backgroundNode: CallControllerBackgroundNode
     private let audioNode: CallControllerAudioNode
@@ -529,6 +531,16 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         
         self.videoContainerNode = PinchSourceContainerNode()
 
+        self.videoContainerTopGradientLayer = CAGradientLayer()
+        self.videoContainerTopGradientLayer.colors = [UIColor.black.withAlphaComponent(0.5).cgColor, UIColor.black.withAlphaComponent(0.0).cgColor]
+        self.videoContainerTopGradientLayer.startPoint = CGPoint(x: 0.0, y: 0.0)
+        self.videoContainerTopGradientLayer.endPoint = CGPoint(x: 0.0, y: 1.0)
+
+        self.videoContainerBottomGradientLayer = CAGradientLayer()
+        self.videoContainerBottomGradientLayer.colors = [UIColor.black.withAlphaComponent(0.0).cgColor, UIColor.black.withAlphaComponent(0.5).cgColor]
+        self.videoContainerBottomGradientLayer.startPoint = CGPoint(x: 0.0, y: 0.0)
+        self.videoContainerBottomGradientLayer.endPoint = CGPoint(x: 0.0, y: 1.0)
+
         self.backgroundNode = CallControllerBackgroundNode()
 
         self.audioNode = CallControllerAudioNode()
@@ -601,6 +613,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         self.containerNode.addSubnode(self.keyButtonNode)
         self.containerNode.addSubnode(self.backButtonArrowNode)
         self.containerNode.addSubnode(self.backButtonNode)
+
+        self.videoContainerNode.layer.addSublayer(videoContainerTopGradientLayer)
+        self.videoContainerNode.layer.addSublayer(videoContainerBottomGradientLayer)
 
         self.audioNode.setSignal(call.audioLevel)
         
@@ -1904,6 +1919,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         let statusAlpha: CGFloat = min(pinchTransitionAlpha, uiDisplayTransition)
         var overlayAlpha: CGFloat = min(pinchTransitionAlpha, uiDisplayTransition)
         var toastAlpha: CGFloat = min(pinchTransitionAlpha, pipTransitionAlpha)
+        let gradientAlpha: CGFloat = min(hasVideoNodes ? 1.0 : 0.0, uiDisplayTransition)
 
         switch self.callState?.state {
         case .terminated, .terminating:
@@ -1929,6 +1945,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         transition.updateFrame(node: self.containerNode, frame: CGRect(origin: CGPoint(x: (containerFrame.width - layout.size.width) / 2.0, y: floor(containerFrame.height - layout.size.height) / 2.0), size: layout.size))
         transition.updateFrame(node: self.videoContainerNode, frame: containerFullScreenFrame)
         self.videoContainerNode.update(size: containerFullScreenFrame.size, transition: transition)
+
+        transition.updateFrame(layer: videoContainerTopGradientLayer, frame: CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: navigationBarHeight + 44.0)))
         
         if let keyPreviewNode = self.keyPreviewNode {
             transition.updateFrame(node: keyPreviewNode, frame: containerFullScreenFrame)
@@ -2002,6 +2020,11 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         transition.updateFrame(node: self.toastNode, frame: CGRect(origin: CGPoint(x: 0.0, y: toastOriginY), size: CGSize(width: layout.size.width, height: toastHeight.original)))
         transition.updateFrame(node: self.buttonsNode, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonsOriginY), size: CGSize(width: layout.size.width, height: buttonsHeight)))
         transition.updateAlpha(node: self.buttonsNode, alpha: overlayAlpha)
+
+        transition.updateFrame(layer: videoContainerBottomGradientLayer, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonsOriginY - 44.0), size: CGSize(width: layout.size.width, height: layout.size.height - (buttonsOriginY - 44.0))))
+
+        transition.updateAlpha(layer: videoContainerTopGradientLayer, alpha: gradientAlpha)
+        transition.updateAlpha(layer: videoContainerBottomGradientLayer, alpha: gradientAlpha)
         
         let fullscreenVideoFrame = containerFullScreenFrame
         let previewVideoFrame = self.calculatePreviewVideoRect(layout: layout, navigationHeight: navigationBarHeight)

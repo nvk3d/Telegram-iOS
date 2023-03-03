@@ -148,6 +148,8 @@ private class CallCameraPreviewControllerNode: ViewControllerTracingNode, UIScro
     private var presentationData: PresentationData
     
     private let cameraNode: CallPreviewVideoNode
+    private let topGradientLayer: CAGradientLayer
+    private let bottomGradientLayer: CAGradientLayer
     private let dimNode: ASDisplayNode
     private let wrappingScrollNode: ASScrollNode
     private let contentContainerNode: ASDisplayNode
@@ -193,6 +195,16 @@ private class CallCameraPreviewControllerNode: ViewControllerTracingNode, UIScro
         self.presentationData = sharedContext.currentPresentationData.with { $0 }
         
         self.cameraNode = cameraNode
+
+        self.topGradientLayer = CAGradientLayer()
+        self.topGradientLayer.colors = [UIColor.black.withAlphaComponent(0.5).cgColor, UIColor.black.withAlphaComponent(0.0).cgColor]
+        self.topGradientLayer.startPoint = CGPoint(x: 0.0, y: 0.0)
+        self.topGradientLayer.endPoint = CGPoint(x: 0.0, y: 1.0)
+
+        self.bottomGradientLayer = CAGradientLayer()
+        self.bottomGradientLayer.colors = [UIColor.black.withAlphaComponent(0.0).cgColor, UIColor.black.withAlphaComponent(0.5).cgColor]
+        self.bottomGradientLayer.startPoint = CGPoint(x: 0.0, y: 0.0)
+        self.bottomGradientLayer.endPoint = CGPoint(x: 0.0, y: 1.0)
         
         self.wrappingScrollNode = ASScrollNode()
         self.wrappingScrollNode.view.alwaysBounceVertical = true
@@ -271,6 +283,9 @@ private class CallCameraPreviewControllerNode: ViewControllerTracingNode, UIScro
         
         self.backgroundNode.addSubnode(self.contentBackgroundNode)
         self.backgroundNode.addSubnode(self.cameraNode)
+
+        self.contentContainerNode.layer.addSublayer(topGradientLayer)
+        self.contentContainerNode.layer.addSublayer(bottomGradientLayer)
 
         self.contentContainerNode.addSubnode(self.previewContainerNode)
         self.contentContainerNode.addSubnode(self.titleNode)
@@ -483,6 +498,8 @@ private class CallCameraPreviewControllerNode: ViewControllerTracingNode, UIScro
             transition.updateAlpha(node: titleNode, alpha: 0.0)
             transition.updateAlpha(node: wheelNode, alpha: 0.0)
             transition.updateAlpha(node: doneButton, alpha: 0.0)
+            transition.updateAlpha(layer: topGradientLayer, alpha: 0.0)
+            transition.updateAlpha(layer: bottomGradientLayer, alpha: 0.0)
 
             cameraNode.updateLayout(size: toRect.size, cornerRadius: 14.0, isOutgoing: true, deviceOrientation: .portrait, isCompactLayout: false, transition: transition)
             transition.updateFrame(node: cameraNode, frame: toRect)
@@ -591,6 +608,8 @@ private class CallCameraPreviewControllerNode: ViewControllerTracingNode, UIScro
         
         self.cameraNode.frame = CGRect(origin: CGPoint(), size: previewSize)
         self.cameraNode.updateLayout(size: previewSize, cornerRadius: layout.deviceMetrics.screenCornerRadius, isOutgoing: true, deviceOrientation: .portrait, isCompactLayout: false, transition: .immediate)
+
+        self.topGradientLayer.frame = CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: navigationBarHeight + 44.0))
       
         self.placeholderTextNode.attributedText = NSAttributedString(string: presentationData.strings.VoiceChat_VideoPreviewShareScreenInfo, font: Font.semibold(16.0), textColor: .white)
         self.placeholderIconNode.image = generateTintedImage(image: UIImage(bundleImageName: isTablet ? "Call/ScreenShareTablet" : "Call/ScreenSharePhone"), color: .white)
@@ -614,6 +633,8 @@ private class CallCameraPreviewControllerNode: ViewControllerTracingNode, UIScro
         let wheelFrame = CGRect(origin: CGPoint(x: 16.0 + previewFrame.minX, y: doneButtonFrame.minY - 36.0 - 20.0), size: CGSize(width: previewFrame.width - 32.0, height: 36.0))
         self.wheelNode.updateLayout(size: wheelFrame.size, transition: transition)
         transition.updateFrame(node: self.wheelNode, frame: wheelFrame)
+
+        bottomGradientLayer.frame = CGRect(origin: CGPoint(x: 0.0, y: wheelFrame.minY - 44.0), size: CGSize(width: layout.size.width, height: layout.size.height - (wheelFrame.minY - 44.0)))
         
         transition.updateFrame(node: self.contentContainerNode, frame: contentFrame)
     }
