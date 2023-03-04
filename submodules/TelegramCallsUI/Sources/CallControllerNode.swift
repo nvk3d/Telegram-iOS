@@ -451,6 +451,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private var displayingStatusToast: Bool = false
 
     private var displayedActiveStateOnce: Bool = false
+    private var displayedKeyAnimation: Bool = false
     private var displayedVersionOutdatedAlert: Bool = false
 
     private var animationSnapshotExist: Bool {
@@ -1256,8 +1257,6 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 let keyTextSize = self.keyButtonNode.measure(CGSize(width: 200.0, height: 200.0))
                 self.keyButtonNode.frame = CGRect(origin: self.keyButtonNode.frame.origin, size: keyTextSize)
 
-                self.keyButtonNode.animateIn()
-
                 if let (layout, navigationBarHeight) = self.validLayout {
                     self.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, transition: .immediate)
                 }
@@ -1949,8 +1948,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         transition.updateFrame(layer: videoContainerTopGradientLayer, frame: CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: navigationBarHeight + 44.0)))
         
         if let keyPreviewNode = self.keyPreviewNode {
-            transition.updateFrame(node: keyPreviewNode, frame: containerFullScreenFrame)
-            keyPreviewNode.updateLayout(size: layout.size, transition: .immediate)
+            updateKeyPreviewLayout(keyPreviewNode, layout: layout)
         }
         
         let navigationOffset: CGFloat = max(20.0, layout.safeInsets.top)
@@ -2139,8 +2137,13 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         }
         
         let keyTextSize = self.keyButtonNode.frame.size
-        transition.updateFrame(node: self.keyButtonNode, frame: CGRect(origin: CGPoint(x: layout.size.width - keyTextSize.width - 8.0, y: topOriginY + 8.0), size: keyTextSize))
-        transition.updateAlpha(node: self.keyButtonNode, alpha: overlayAlpha)
+        transition.updateFrame(node: self.keyButtonNode, frame: CGRect(origin: CGPoint(x: layout.size.width - keyTextSize.width, y: layout.insets(options: .statusBar).top), size: keyTextSize))
+        keyButtonNode.updateLayout()
+        if displayedActiveStateOnce, !displayedKeyAnimation {
+            displayedKeyAnimation = true
+            keyButtonNode.animateIn(topPanelTransition)
+        }
+        transition.updateAlpha(node: self.keyButtonNode, alpha: topPanelAlpha)
         
         if let debugNode = self.debugNode {
             transition.updateFrame(node: debugNode, frame: CGRect(origin: CGPoint(), size: layout.size))
@@ -2183,6 +2186,13 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             }
         }
     }
+
+    private func updateKeyPreviewLayout(_ keyPreviewNode: CallControllerKeyPreviewNode, layout: ContainerViewLayout) {
+        let keyNavigationOffset: CGFloat = layout.size.height >= 700.0 ? 29.0 : 0.0
+        let keyPreviewSize = keyPreviewNode.updateLayout(size: CGSize(width: layout.size.width - 44.0 * 2.0, height: layout.size.height), transition: .immediate)
+        let keyPreviewFrame = CGRect(x: 44.0, y: layout.insets(options: .statusBar).top + 44.0 + keyNavigationOffset, width: keyPreviewSize.width, height: keyPreviewSize.height)
+        ContainedViewLayoutTransition.immediate.updateFrame(node: keyPreviewNode, frame: keyPreviewFrame)
+    }
     
     @objc func keyPressed() {
         if self.keyPreviewNode == nil, let keyText = self.keyTextData?.1, let peer = self.peer {
@@ -2195,8 +2205,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             self.containerNode.insertSubnode(keyPreviewNode, belowSubnode: self.statusNode)
             self.keyPreviewNode = keyPreviewNode
             
-            if let (validLayout, _) = self.validLayout {
-                keyPreviewNode.updateLayout(size: validLayout.size, transition: .immediate)
+            if let (layout, _) = self.validLayout {
+                updateKeyPreviewLayout(keyPreviewNode, layout: layout)
                 
                 self.keyButtonNode.isHidden = true
                 keyPreviewNode.animateIn(from: self.keyButtonNode.frame, fromNode: self.keyButtonNode)

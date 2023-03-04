@@ -4,73 +4,45 @@ import Display
 import AsyncDisplayKit
 import CallsEmoji
 
-private let labelFont = Font.regular(22.0)
-private let animationNodesCount = 3
+private let labelFont = Font.regular(40.0)
 
 private class EmojiSlotNode: ASDisplayNode {
     var emoji: String = "" {
         didSet {
             self.node.attributedText = NSAttributedString(string: emoji, font: labelFont, textColor: .black)
-            let _ = self.node.updateLayout(CGSize(width: 100.0, height: 100.0))
+            updateLayout()
         }
     }
-    
-    private let maskNode: ASDisplayNode
+
     private let containerNode: ASDisplayNode
     private let node: ImmediateTextNode
-    private let animationNodes: [ImmediateTextNode]
     
     override init() {
-        self.maskNode = ASDisplayNode()
         self.containerNode = ASDisplayNode()
         self.node = ImmediateTextNode()
-        self.animationNodes = (0 ..< animationNodesCount).map { _ in ImmediateTextNode() }
                     
         super.init()
-        
-        let maskLayer = CAGradientLayer()
-        maskLayer.colors = [UIColor.clear.cgColor, UIColor.white.cgColor, UIColor.white.cgColor, UIColor.clear.cgColor]
-        maskLayer.locations = [0.0, 0.2, 0.8, 1.0]
-        maskLayer.startPoint = CGPoint(x: 0.5, y: 0.0)
-        maskLayer.endPoint = CGPoint(x: 0.5, y: 1.0)
-        self.maskNode.layer.mask = maskLayer
-        
-        self.addSubnode(self.maskNode)
-        self.maskNode.addSubnode(self.containerNode)
+
+        self.addSubnode(self.containerNode)
         self.containerNode.addSubnode(self.node)
-        self.animationNodes.forEach({ self.containerNode.addSubnode($0) })
     }
-    
-    func animateIn(duration: Double) {
-        for node in self.animationNodes {
-            node.attributedText = NSAttributedString(string: randomCallsEmoji(), font: labelFont, textColor: .black)
-            let _ = node.updateLayout(CGSize(width: 100.0, height: 100.0))
-        }
-        self.containerNode.layer.animatePosition(from: CGPoint(x: 0.0, y: -self.containerNode.frame.height + self.bounds.height), to: CGPoint(), duration: duration, delay: 0.1, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
-    }
-    
-    override func layout() {
-        super.layout()
-        
-        let maskInset: CGFloat = 4.0
-        let maskFrame = self.bounds.insetBy(dx: 0.0, dy: -maskInset)
-        self.maskNode.frame = maskFrame
-        self.maskNode.layer.mask?.frame = CGRect(origin: CGPoint(), size: maskFrame.size)
-        
-        let spacing: CGFloat = 2.0
-        let containerSize = CGSize(width: self.bounds.width, height: self.bounds.height * CGFloat(animationNodesCount + 1) + spacing * CGFloat(animationNodesCount))
-        self.containerNode.frame = CGRect(origin: CGPoint(x: 0.0, y: maskInset), size: containerSize)
-        
-        self.node.frame = CGRect(origin: CGPoint(), size: self.bounds.size)
-        var offset: CGFloat = self.bounds.height + spacing
-        for node in self.animationNodes {
-            node.frame = CGRect(origin: CGPoint(x: 0.0, y: offset), size: self.bounds.size)
-            offset += self.bounds.height + spacing
-        }
+
+    func updateLayout() {
+        let containerSize = bounds.size
+        let containerFrame = CGRect(origin: .zero, size: containerSize)
+        containerNode.layer.position = CGPoint(x: containerFrame.midX, y: containerFrame.midY)
+        containerNode.layer.bounds = CGRect(origin: .zero, size: containerSize)
+
+        let nodeSize = node.updateLayout(CGSize(width: 100.0, height: 100.0))
+        let nodeFrame = CGRect(origin: CGPoint(x: (containerSize.width - nodeSize.width) / 2.0, y: (containerSize.height - nodeSize.height) / 2.0), size: nodeSize)
+        node.layer.position = CGPoint(x: nodeFrame.midX, y: nodeFrame.midY)
+        node.layer.bounds = CGRect(origin: .zero, size: nodeSize)
     }
 }
 
 final class CallControllerKeyButton: HighlightableButtonNode {
+    private var scaled: Bool = false
+
     private let containerNode: ASDisplayNode
     private let nodes: [EmojiSlotNode]
     
@@ -92,36 +64,57 @@ final class CallControllerKeyButton: HighlightableButtonNode {
         self.nodes = (0 ..< 4).map { _ in EmojiSlotNode() }
        
         super.init(pointerStyle: nil)
-        
+
+        containerNode.layer.anchorPoint = CGPoint(x: 1.0, y: 0.0)
         self.addSubnode(self.containerNode)
         self.nodes.forEach({ self.containerNode.addSubnode($0) })
+
+        ContainedViewLayoutTransition.immediate.updateTransformScale(layer: containerNode.layer, scale: 0.5)
     }
         
-    func animateIn() {
-        self.layoutIfNeeded()
-        self.containerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-        
-        var duration: Double = 0.75
-        for node in self.nodes {
-            node.animateIn(duration: duration)
-            duration += 0.3
+    func animateIn(_ transition: ContainedViewLayoutTransition) {
+        let nodeSize: CGSize = CGSize(width: 48.0, height: 48.0)
+        let interitemInset: CGFloat = 4.0
+        var duration: Double = 0.0
+        var timingFunction: String = ""
+        if case let .animated(d, c) = transition {
+            duration = d
+            timingFunction = c.timingFunction
+        }
+
+        var delta: CGFloat = nodeSize.width / 2.0
+        for node in self.nodes.reversed() {
+            let position = node.layer.position
+            node.layer.animatePosition(from: CGPoint(x: position.x - delta, y: position.y), to: position, duration: duration, timingFunction: timingFunction)
+            delta += interitemInset + nodeSize.width / 2.0
         }
     }
-    
+
+    func scale(value: Bool, transition: ContainedViewLayoutTransition) {
+        scaled = value
+        transition.updateTransformScale(node: containerNode, scale: value ? 1.0 : 0.5)
+    }
+
     override func measure(_ constrainedSize: CGSize) -> CGSize {
-        return CGSize(width: 114.0, height: 26.0)
+        scaled ? CGSize(width: 224.0, height: 68.0) : CGSize(width: 122.0, height: 44.0)
     }
-    
-    override func layout() {
-        super.layout()
-        
-        self.containerNode.frame = self.bounds
-        var index = 0
-        let nodeSize = CGSize(width: 29.0, height: self.bounds.size.height)
+
+    func updateLayout() {
+        let containerSize = CGSize(width: 48.0 * 4.0 + 4.0 * 3.0, height: 48.0)
+        containerNode.layer.position = CGPoint(x: bounds.width - 10.0, y: 10.0)
+        containerNode.layer.bounds = CGRect(origin: .zero, size: containerSize)
+
+        let nodeSize = CGSize(width: 48.0, height: 48.0)
+        let interitemInset: CGFloat = 4.0
+        var offsetX: CGFloat = 0.0
+
         for node in self.nodes {
-            node.frame = CGRect(origin: CGPoint(x: CGFloat(index) * nodeSize.width, y: 0.0), size: nodeSize)
-            index += 1
+            let frame = CGRect(origin: CGPoint(x: offsetX, y: 0.0), size: nodeSize)
+            node.position = CGPoint(x: frame.midX, y: frame.midY)
+            node.bounds = CGRect(origin: .zero, size: frame.size)
+            node.updateLayout()
+
+            offsetX += nodeSize.width + interitemInset
         }
-        self.nodes.forEach({ self.containerNode.addSubnode($0) })
     }
 }
