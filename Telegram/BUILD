@@ -519,16 +519,16 @@ plist_fragment(
     name = "TelegramEntitlements",
     extension = "entitlements",
     template = "".join([
-        #aps_fragment,
+        aps_fragment,
         app_groups_fragment,
-        #siri_fragment,
-        #associated_domains_fragment,
-        #icloud_fragment,
-        #apple_pay_merchants_fragment,
-        #unrestricted_voip_fragment,
-        #carplay_fragment,
-        #communication_notifications_fragment,
-        #signin_fragment,
+        siri_fragment,
+        associated_domains_fragment,
+        icloud_fragment,
+        apple_pay_merchants_fragment,
+        unrestricted_voip_fragment,
+        carplay_fragment,
+        communication_notifications_fragment,
+        signin_fragment,
     ])
 )
 
