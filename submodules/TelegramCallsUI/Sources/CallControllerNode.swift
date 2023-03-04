@@ -452,6 +452,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private var displayingStatusToast: Bool = false
 
     private var displayedActiveStateOnce: Bool = false
+    private var displayedKeyTooltip: Bool = false
+    private var displayedKeyPreviewOnce: Bool = false
     private var displayedKeyAnimation: Bool = false
     private var displayedVersionOutdatedAlert: Bool = false
 
@@ -903,6 +905,14 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             return .dismiss(consume: false)
         }))
     }
+
+    func displayKeyTooltip() {
+        guard self.keyPreviewNode == nil else { return }
+        guard !self.displayedKeyPreviewOnce else { return }
+
+        let location = keyButtonNode.frame
+        self.present?(TooltipScreen(account: self.account, text: "Encryption key of this call", style: .light, icon: nil, location: .point(location.offsetBy(dx: 0.0, dy: 0.0), .top), displayDuration: .custom(5.0), shouldDismissOnTouch: { _ in return .dismiss(consume: false) }))
+    }
     
     override func didLoad() {
         super.didLoad()
@@ -1268,6 +1278,17 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
                 statusReception = reception
             } else {
                 statusValue = .text(string: strings.Call_StatusConnecting, loading: true)
+            }
+
+            if !displayedKeyTooltip {
+                displayedKeyTooltip = true
+
+                Queue.mainQueue().after(0.5) { [weak self] in
+                    guard let self = self else { return }
+                    if self.keyPreviewNode == nil {
+                        self.displayKeyTooltip()
+                    }
+                }
             }
         }
         if self.shouldStayHiddenUntilConnection {
@@ -2279,6 +2300,9 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     
     @objc func keyPressed() {
         if self.keyPreviewNode == nil, let keyText = self.keyTextData?.1, let peer = self.peer {
+            displayedKeyPreviewOnce = true
+            displayedKeyTooltip = true
+
             let keyPreviewNode = CallControllerKeyPreviewNode(
                 keyText: keyText,
                 effectStyle: hasVideoNodes ? .dark : .light,
