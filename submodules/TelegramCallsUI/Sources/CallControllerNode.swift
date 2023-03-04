@@ -380,6 +380,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     
     private let sharedContext: SharedAccountContext
     private let account: Account
+    private let accountContext: AccountContext
     
     private let statusBar: StatusBar
     
@@ -517,10 +518,14 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
     private var orientationDidChangeObserver: NSObjectProtocol?
     
     private var currentRequestedAspect: CGFloat?
+
+    private var animatedEmojies: [String: [StickerPackItem]] = [:]
+    private var animatedEmojiDisposable: Disposable?
     
-    init(sharedContext: SharedAccountContext, account: Account, presentationData: PresentationData, statusBar: StatusBar, debugInfo: Signal<(String, String), NoError>, shouldStayHiddenUntilConnection: Bool = false, easyDebugAccess: Bool, call: PresentationCall) {
+    init(sharedContext: SharedAccountContext, account: Account, accountContext: AccountContext, presentationData: PresentationData, statusBar: StatusBar, debugInfo: Signal<(String, String), NoError>, shouldStayHiddenUntilConnection: Bool = false, easyDebugAccess: Bool, call: PresentationCall) {
         self.sharedContext = sharedContext
         self.account = account
+        self.accountContext = accountContext
         self.presentationData = presentationData
         self.statusBar = statusBar
         self.debugInfo = debugInfo
@@ -881,6 +886,32 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             guard proximited else { return }
             self.updateAnimationsState(paused: true, force: true)
         }
+
+        let animatedEmojiStickers = accountContext.engine.stickers.loadedStickerPack(reference: .animatedEmoji, forceActualized: false)
+        |> map { animatedEmoji -> [String: [StickerPackItem]] in
+            var animatedEmojiStickers: [String: [StickerPackItem]] = [:]
+            switch animatedEmoji {
+                case let .result(_, items, _):
+                    for item in items {
+                        if let emoji = item.getStringRepresentationsOfIndexKeys().first {
+                            animatedEmojiStickers[emoji.basicEmoji.0] = [item]
+                            let strippedEmoji = emoji.basicEmoji.0.strippedEmoji
+                            if animatedEmojiStickers[strippedEmoji] == nil {
+                                animatedEmojiStickers[strippedEmoji] = [item]
+                            }
+                        }
+                    }
+                default:
+                    break
+            }
+            return animatedEmojiStickers
+        }
+
+        animatedEmojiDisposable = animatedEmojiStickers.start { [weak self] animatedEmojis in
+            Queue.mainQueue().async { [weak self] in
+                self?.animatedEmojies = animatedEmojis
+            }
+        }
     }
     
     deinit {
@@ -892,6 +923,7 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
         }
         animationsPauseTimer?.invalidate()
         animationsPauseTimer = nil
+        animatedEmojiDisposable?.dispose()
     }
     
     func displayCameraTooltip() {
@@ -2304,6 +2336,8 @@ final class CallControllerNode: ViewControllerTracingNode, CallControllerNodePro
             displayedKeyTooltip = true
 
             let keyPreviewNode = CallControllerKeyPreviewNode(
+                context: accountContext,
+                emojis: animatedEmojies,
                 keyText: keyText,
                 effectStyle: hasVideoNodes ? .dark : .light,
                 infoText: self.presentationData.strings.Call_EmojiDescription(EnginePeer(peer).compactDisplayTitle).string.replacingOccurrences(of: "%%", with: "%"),

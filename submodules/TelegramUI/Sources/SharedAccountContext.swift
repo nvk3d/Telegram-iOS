@@ -669,7 +669,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                         
                         if let call = call {
                             mainWindow.hostView.containerView.endEditing(true)
-                            let callController = CallController(sharedContext: strongSelf, account: call.context.account, call: call, easyDebugAccess: !GlobalExperimentalSettings.isAppStoreBuild)
+                            let callController = CallController(sharedContext: strongSelf, account: call.context.account, accountContext: call.context, call: call, easyDebugAccess: !GlobalExperimentalSettings.isAppStoreBuild)
                             strongSelf.callController = callController
                             strongSelf.mainWindow?.present(callController, on: .calls)
                             strongSelf.callState.set(call.state

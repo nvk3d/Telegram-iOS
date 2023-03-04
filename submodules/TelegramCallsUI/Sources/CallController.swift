@@ -53,6 +53,7 @@ public final class CallController: ViewController {
     
     private let sharedContext: SharedAccountContext
     private let account: Account
+    private let accountContext: AccountContext
     public let call: PresentationCall
     private let easyDebugAccess: Bool
     
@@ -77,9 +78,10 @@ public final class CallController: ViewController {
     
     private let idleTimerExtensionDisposable = MetaDisposable()
     
-    public init(sharedContext: SharedAccountContext, account: Account, call: PresentationCall, easyDebugAccess: Bool) {
+    public init(sharedContext: SharedAccountContext, account: Account, accountContext: AccountContext, call: PresentationCall, easyDebugAccess: Bool) {
         self.sharedContext = sharedContext
         self.account = account
+        self.accountContext = accountContext
         self.call = call
         self.easyDebugAccess = easyDebugAccess
         
@@ -140,7 +142,7 @@ public final class CallController: ViewController {
     
     override public func loadDisplayNode() {
         if self.call.isVideoPossible {
-            self.displayNode = CallControllerNode(sharedContext: self.sharedContext, account: self.account, presentationData: self.presentationData, statusBar: self.statusBar, debugInfo: self.call.debugInfo(), shouldStayHiddenUntilConnection: !self.call.isOutgoing && self.call.isIntegratedWithCallKit, easyDebugAccess: self.easyDebugAccess, call: self.call)
+            self.displayNode = CallControllerNode(sharedContext: self.sharedContext, account: self.account, accountContext: self.accountContext, presentationData: self.presentationData, statusBar: self.statusBar, debugInfo: self.call.debugInfo(), shouldStayHiddenUntilConnection: !self.call.isOutgoing && self.call.isIntegratedWithCallKit, easyDebugAccess: self.easyDebugAccess, call: self.call)
         } else {
             self.displayNode = LegacyCallControllerNode(sharedContext: self.sharedContext, account: self.account, presentationData: self.presentationData, statusBar: self.statusBar, debugInfo: self.call.debugInfo(), shouldStayHiddenUntilConnection: !self.call.isOutgoing && self.call.isIntegratedWithCallKit, easyDebugAccess: self.easyDebugAccess, call: self.call)
         }

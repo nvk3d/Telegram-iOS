@@ -1,8 +1,10 @@
-import Foundation
-import UIKit
-import Display
+import AccountContext
 import AsyncDisplayKit
+import Display
+import DrawingUI
 import CallsEmoji
+import TelegramCore
+import UIKit
 
 private let labelFont = Font.regular(40.0)
 
@@ -14,10 +16,29 @@ private class EmojiSlotNode: ASDisplayNode {
         }
     }
 
+    var entity: DrawingStickerEntity? {
+        didSet {
+            stickerView?.removeFromSuperview()
+            stickerView = nil
+
+            if let context = context, let entity = entity {
+                let view = entity.makeView(context: context)
+                view.frame = CGRect(origin: .zero, size: CGSize(width: 48.0, height: 48.0))
+                containerNode.view.addSubview(view)
+                stickerView = view
+                updateLayout()
+            }
+        }
+    }
+
+    private let context: AccountContext?
+
     private let containerNode: ASDisplayNode
     private let node: ImmediateTextNode
+    private var stickerView: DrawingEntityView?
     
-    override init() {
+    init(context: AccountContext?) {
+        self.context = context
         self.containerNode = ASDisplayNode()
         self.node = ImmediateTextNode()
                     
@@ -37,10 +58,20 @@ private class EmojiSlotNode: ASDisplayNode {
         let nodeFrame = CGRect(origin: CGPoint(x: (containerSize.width - nodeSize.width) / 2.0, y: (containerSize.height - nodeSize.height) / 2.0), size: nodeSize)
         node.layer.position = CGPoint(x: nodeFrame.midX, y: nodeFrame.midY)
         node.layer.bounds = CGRect(origin: .zero, size: nodeSize)
+
+        stickerView?.layer.position = CGPoint(x: containerSize.width / 2.0, y: containerSize.height / 2.0)
+        stickerView?.layer.bounds = CGRect(origin: .zero, size: CGSize(width: 48.0, height: 48.0))
+        stickerView?.layoutSubviews()
     }
 }
 
 final class CallControllerKeyButton: HighlightableButtonNode {
+    enum AnimatingSource {
+        case source(AccountContext, [String: [StickerPackItem]])
+        case none
+    }
+
+    private var source: AnimatingSource = .none
     private var scaled: Bool = false
 
     private let containerNode: ASDisplayNode
@@ -48,20 +79,53 @@ final class CallControllerKeyButton: HighlightableButtonNode {
     
     var key: String = "" {
         didSet {
+            var animated: [String: [StickerPackItem]] = [:]
+
+            switch source {
+            case let .source(_, emojis):
+                animated = emojis
+            case .none:
+                break
+            }
+
+            var entities: [DrawingStickerEntity] = []
             var index = 0
-            for emoji in self.key {
-                guard index < 4 else {
-                    return
+            for emoji in key {
+                guard index < 4 else { break }
+
+                if let pack = animated[String(emoji)], let file = pack.first?.file {
+                    entities.append(DrawingStickerEntity(content: .file(file)))
+                    index += 1
+                } else {
+                    break
                 }
-                self.nodes[index].emoji = String(emoji)
-                index += 1
+            }
+
+            if entities.count == 4 {
+                for (i, entity) in entities.enumerated() {
+                    self.nodes[i].entity = entity
+                }
+            } else {
+                index = 0
+                for emoji in key {
+                    guard index < 4 else { break }
+
+                    self.nodes[index].emoji = String(emoji)
+                    index += 1
+                }
             }
         }
     }
     
-    init() {
+    init(source: AnimatingSource = .none) {
         self.containerNode = ASDisplayNode()
-        self.nodes = (0 ..< 4).map { _ in EmojiSlotNode() }
+        var context: AccountContext?
+        if case let .source(ctx, _) = source {
+            context = ctx
+        }
+        self.nodes = (0 ..< 4).map { _ in EmojiSlotNode(context: context) }
+
+        self.source = source
        
         super.init(pointerStyle: nil)
 

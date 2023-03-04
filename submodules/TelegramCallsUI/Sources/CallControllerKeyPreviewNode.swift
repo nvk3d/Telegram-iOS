@@ -1,7 +1,11 @@
+import AccountContext
+import AnimatedStickerNode
 import AsyncDisplayKit
 import Display
+import DrawingUI
 import Foundation
 import SwiftSignalKit
+import TelegramCore
 import UIKit
 
 final class CallControllerKeyPreviewNode: ASDisplayNode {
@@ -11,6 +15,7 @@ final class CallControllerKeyPreviewNode: ASDisplayNode {
     }
 
     private var effectStyle: EffectStyle = .light
+    private let emojis: [String: [StickerPackItem]]
 
     private let containerNode: ASDisplayNode
     private let contentBackgroundView: UIVisualEffectView
@@ -22,14 +27,15 @@ final class CallControllerKeyPreviewNode: ASDisplayNode {
 
     private let dismiss: () -> Void
 
-    init(keyText: String, effectStyle: EffectStyle, infoText: String, dismiss: @escaping () -> Void) {
+    init(context: AccountContext, emojis: [String: [StickerPackItem]], keyText: String, effectStyle: EffectStyle, infoText: String, dismiss: @escaping () -> Void) {
         self.effectStyle = effectStyle
+        self.emojis = emojis
 
         containerNode = ASDisplayNode()
 
         contentBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: effectStyle == .light ? .light : .dark))
 
-        emojiContainerNode = CallControllerKeyButton()
+        emojiContainerNode = CallControllerKeyButton(source: .source(context, emojis))
         emojiContainerNode.key = keyText
         emojiContainerNode.layer.anchorPoint = CGPoint(x: 1.0, y: 0.0)
         emojiContainerNode.isUserInteractionEnabled = false
