@@ -129,6 +129,10 @@ final class CallControllerButtonsNode: ASDisplayNode {
     func videoButtonFrame() -> CGRect? {
         return self.buttonNodes[.enableCamera]?.frame
     }
+
+    func endCallButtonFrame() -> CGRect? {
+        return self.buttonNodes[.acceptOrEnd]?.frame
+    }
     
     private func updateButtonsLayout(strings: PresentationStrings, mode: CallControllerButtonsMode, width: CGFloat, bottomInset: CGFloat, animated: Bool) -> CGFloat {
         let transition: ContainedViewLayoutTransition

@@ -5,6 +5,13 @@ import SwiftSignalKit
 import UIKit
 
 final class CallControllerKeyPreviewNode: ASDisplayNode {
+    enum EffectStyle {
+        case light
+        case dark
+    }
+
+    private var effectStyle: EffectStyle = .light
+
     private let containerNode: ASDisplayNode
     private let contentBackgroundView: UIVisualEffectView
     private let emojiContainerNode: CallControllerKeyButton
@@ -15,10 +22,12 @@ final class CallControllerKeyPreviewNode: ASDisplayNode {
 
     private let dismiss: () -> Void
 
-    init(keyText: String, infoText: String, dismiss: @escaping () -> Void) {
+    init(keyText: String, effectStyle: EffectStyle, infoText: String, dismiss: @escaping () -> Void) {
+        self.effectStyle = effectStyle
+
         containerNode = ASDisplayNode()
 
-        contentBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: .light))
+        contentBackgroundView = UIVisualEffectView(effect: UIBlurEffect(style: effectStyle == .light ? .light : .dark))
 
         emojiContainerNode = CallControllerKeyButton()
         emojiContainerNode.key = keyText
@@ -82,7 +91,7 @@ final class CallControllerKeyPreviewNode: ASDisplayNode {
         transition.updateFrame(node: titleNode, frame: titleFrame)
 
         let subtitleSize = subtitleNode.measure(CGSize(width: size.width - 16.0 * 2.0, height: .greatestFiniteMagnitude))
-        let subtitleFrame = CGRect(x: 16.0, y: titleFrame.maxY + 10.0, width: subtitleSize.width, height: subtitleSize.height)
+        let subtitleFrame = CGRect(x: 16.0, y: titleFrame.maxY + 10.0, width: size.width - 16.0 * 2.0, height: subtitleSize.height)
         transition.updateFrame(node: subtitleNode, frame: subtitleFrame)
 
         let separatorSize = CGSize(width: size.width, height: UIScreenPixel)
@@ -90,7 +99,7 @@ final class CallControllerKeyPreviewNode: ASDisplayNode {
         transition.updateFrame(node: separatorNode, frame: separatorFrame)
 
         let completeSize = completeNode.measure(CGSize(width: size.width - 16.0 * 2.0, height: .greatestFiniteMagnitude))
-        let completeFrame = CGRect(x: 16.0, y: separatorFrame.maxY + (56.0 - completeSize.height) / 2.0, width: size.width - 16.0, height: completeSize.height)
+        let completeFrame = CGRect(x: 16.0, y: separatorFrame.maxY + (56.0 - completeSize.height) / 2.0, width: size.width - 16.0 * 2.0, height: completeSize.height)
         transition.updateFrame(node: completeNode, frame: completeFrame)
 
         let contentBackgroundFrame = CGRect(x: 0.0, y: 0.0, width: size.width, height: separatorFrame.maxY + 56.0)
@@ -155,10 +164,19 @@ final class CallControllerKeyPreviewNode: ASDisplayNode {
         }
     }
 
-    func animateBlur(_ style: UIBlurEffect.Style, transition: ContainedViewLayoutTransition) {
+    func animateBlur(_ style: EffectStyle, transition: ContainedViewLayoutTransition) {
+        guard self.effectStyle != style else { return }
+
+        self.effectStyle = style
         transition.animateView { [weak self] in
             guard let self = self else { return }
-            self.contentBackgroundView.effect = UIBlurEffect(style: style)
+
+            switch style {
+            case .light:
+                self.contentBackgroundView.effect = UIBlurEffect(style: .light)
+            case .dark:
+                self.contentBackgroundView.effect = UIBlurEffect(style: .dark)
+            }
         }
     }
 
