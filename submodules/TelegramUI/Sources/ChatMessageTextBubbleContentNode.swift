@@ -441,112 +441,114 @@ class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                             if let updatedCachedChatMessageText = updatedCachedChatMessageText {
                                 strongSelf.cachedChatMessageText = updatedCachedChatMessageText
                             }
-                            
-                            let cachedLayout = strongSelf.textNode.textNode.cachedLayout
-                            
-                            if case .System = animation {
-                                if let cachedLayout = cachedLayout {
-                                    if !cachedLayout.areLinesEqual(to: textLayout) {
-                                        if let textContents = strongSelf.textNode.textNode.contents {
-                                            let fadeNode = ASDisplayNode()
-                                            fadeNode.displaysAsynchronously = false
-                                            fadeNode.contents = textContents
-                                            fadeNode.frame = strongSelf.textNode.textNode.frame
-                                            fadeNode.isLayerBacked = true
-                                            strongSelf.addSubnode(fadeNode)
-                                            fadeNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak fadeNode] _ in
-                                                fadeNode?.removeFromSupernode()
-                                            })
-                                            strongSelf.textNode.textNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
+
+                            conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) {
+                                let cachedLayout = strongSelf.textNode.textNode.cachedLayout
+                                
+                                if case .System = animation {
+                                    if let cachedLayout = cachedLayout {
+                                        if !cachedLayout.areLinesEqual(to: textLayout) {
+                                            if let textContents = strongSelf.textNode.textNode.contents {
+                                                let fadeNode = ASDisplayNode()
+                                                fadeNode.displaysAsynchronously = false
+                                                fadeNode.contents = textContents
+                                                fadeNode.frame = strongSelf.textNode.textNode.frame
+                                                fadeNode.isLayerBacked = true
+                                                strongSelf.addSubnode(fadeNode)
+                                                fadeNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak fadeNode] _ in
+                                                    fadeNode?.removeFromSupernode()
+                                                })
+                                                strongSelf.textNode.textNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            
-                            let _ = textApply(TextNodeWithEntities.Arguments(context: item.context, cache: item.controllerInteraction.presentationContext.animationCache, renderer: item.controllerInteraction.presentationContext.animationRenderer, placeholderColor: messageTheme.mediaPlaceholderColor, attemptSynchronous: synchronousLoads))
-                            animation.animator.updateFrame(layer: strongSelf.textNode.textNode.layer, frame: textFrame, completion: nil)
-                            
-                            if let (_, spoilerTextApply) = spoilerTextLayoutAndApply {
-                                let spoilerTextNode = spoilerTextApply(TextNodeWithEntities.Arguments(context: item.context, cache: item.controllerInteraction.presentationContext.animationCache, renderer: item.controllerInteraction.presentationContext.animationRenderer, placeholderColor: messageTheme.mediaPlaceholderColor, attemptSynchronous: synchronousLoads))
-                                if strongSelf.spoilerTextNode == nil {
-                                    spoilerTextNode.textNode.alpha = 0.0
-                                    spoilerTextNode.textNode.isUserInteractionEnabled = false
-                                    spoilerTextNode.textNode.contentMode = .topLeft
-                                    spoilerTextNode.textNode.contentsScale = UIScreenScale
-                                    spoilerTextNode.textNode.displaysAsynchronously = false
-                                    strongSelf.insertSubnode(spoilerTextNode.textNode, aboveSubnode: strongSelf.textAccessibilityOverlayNode)
-                                    
-                                    strongSelf.spoilerTextNode = spoilerTextNode
-                                }
                                 
-                                strongSelf.spoilerTextNode?.textNode.frame = textFrame
+                                let _ = textApply(TextNodeWithEntities.Arguments(context: item.context, cache: item.controllerInteraction.presentationContext.animationCache, renderer: item.controllerInteraction.presentationContext.animationRenderer, placeholderColor: messageTheme.mediaPlaceholderColor, attemptSynchronous: synchronousLoads))
+                                animation.animator.updateFrame(layer: strongSelf.textNode.textNode.layer, frame: textFrame, completion: nil)
                                 
-                                let dustNode: InvisibleInkDustNode
-                                if let current = strongSelf.dustNode {
-                                    dustNode = current
-                                } else {
-                                    dustNode = InvisibleInkDustNode(textNode: spoilerTextNode.textNode, enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency)
-                                    strongSelf.dustNode = dustNode
-                                    strongSelf.insertSubnode(dustNode, aboveSubnode: spoilerTextNode.textNode)
-                                }
-                                dustNode.frame = textFrame.insetBy(dx: -3.0, dy: -3.0).offsetBy(dx: 0.0, dy: 3.0)
-                                dustNode.update(size: dustNode.frame.size, color: messageTheme.secondaryTextColor, textColor: messageTheme.primaryTextColor, rects: textLayout.spoilers.map { $0.1.offsetBy(dx: 3.0, dy: 3.0).insetBy(dx: 1.0, dy: 1.0) }, wordRects: textLayout.spoilerWords.map { $0.1.offsetBy(dx: 3.0, dy: 3.0).insetBy(dx: 1.0, dy: 1.0) })
-                            } else if let spoilerTextNode = strongSelf.spoilerTextNode {
-                                strongSelf.spoilerTextNode = nil
-                                spoilerTextNode.textNode.removeFromSupernode()
-                                
-                                if let dustNode = strongSelf.dustNode {
-                                    strongSelf.dustNode = nil
-                                    dustNode.removeFromSupernode()
-                                }
-                            }
-                            
-                            switch strongSelf.visibility {
-                            case .none:
-                                strongSelf.textNode.visibilityRect = nil
-                                strongSelf.spoilerTextNode?.visibilityRect = nil
-                            case let .visible(_, subRect):
-                                var subRect = subRect
-                                subRect.origin.x = 0.0
-                                subRect.size.width = 10000.0
-                                strongSelf.textNode.visibilityRect = subRect
-                                strongSelf.spoilerTextNode?.visibilityRect = subRect
-                            }
-                            
-                            if let textSelectionNode = strongSelf.textSelectionNode {
-                                let shouldUpdateLayout = textSelectionNode.frame.size != textFrame.size
-                                textSelectionNode.frame = textFrame
-                                textSelectionNode.highlightAreaNode.frame = textFrame
-                                if shouldUpdateLayout {
-                                    textSelectionNode.updateLayout()
-                                }
-                            }
-                            strongSelf.textAccessibilityOverlayNode.frame = textFrame
-                            strongSelf.textAccessibilityOverlayNode.cachedLayout = textLayout
-                    
-                            strongSelf.updateIsTranslating(isTranslating)
-                            
-                            if let statusSizeAndApply = statusSizeAndApply {
-                                animation.animator.updateFrame(layer: strongSelf.statusNode.layer, frame: CGRect(origin: CGPoint(x: textFrameWithoutInsets.minX, y: textFrameWithoutInsets.maxY), size: statusSizeAndApply.0), completion: nil)
-                                if strongSelf.statusNode.supernode == nil {
-                                    strongSelf.addSubnode(strongSelf.statusNode)
-                                    statusSizeAndApply.1(.None)
-                                } else {
-                                    statusSizeAndApply.1(animation)
-                                }
-                            } else if strongSelf.statusNode.supernode != nil {
-                                strongSelf.statusNode.removeFromSupernode()
-                            }
-                            
-                            if let forwardInfo = item.message.forwardInfo, forwardInfo.flags.contains(.isImported) {
-                                strongSelf.statusNode.pressed = {
-                                    guard let strongSelf = self else {
-                                        return
+                                if let (_, spoilerTextApply) = spoilerTextLayoutAndApply {
+                                    let spoilerTextNode = spoilerTextApply(TextNodeWithEntities.Arguments(context: item.context, cache: item.controllerInteraction.presentationContext.animationCache, renderer: item.controllerInteraction.presentationContext.animationRenderer, placeholderColor: messageTheme.mediaPlaceholderColor, attemptSynchronous: synchronousLoads))
+                                    if strongSelf.spoilerTextNode == nil {
+                                        spoilerTextNode.textNode.alpha = 0.0
+                                        spoilerTextNode.textNode.isUserInteractionEnabled = false
+                                        spoilerTextNode.textNode.contentMode = .topLeft
+                                        spoilerTextNode.textNode.contentsScale = UIScreenScale
+                                        spoilerTextNode.textNode.displaysAsynchronously = false
+                                        strongSelf.insertSubnode(spoilerTextNode.textNode, aboveSubnode: strongSelf.textAccessibilityOverlayNode)
+                                        
+                                        strongSelf.spoilerTextNode = spoilerTextNode
                                     }
-                                    item.controllerInteraction.displayImportedMessageTooltip(strongSelf.statusNode)
+                                    
+                                    strongSelf.spoilerTextNode?.textNode.frame = textFrame
+                                    
+                                    let dustNode: InvisibleInkDustNode
+                                    if let current = strongSelf.dustNode {
+                                        dustNode = current
+                                    } else {
+                                        dustNode = InvisibleInkDustNode(textNode: spoilerTextNode.textNode, enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency)
+                                        strongSelf.dustNode = dustNode
+                                        strongSelf.insertSubnode(dustNode, aboveSubnode: spoilerTextNode.textNode)
+                                    }
+                                    dustNode.frame = textFrame.insetBy(dx: -3.0, dy: -3.0).offsetBy(dx: 0.0, dy: 3.0)
+                                    dustNode.update(size: dustNode.frame.size, color: messageTheme.secondaryTextColor, textColor: messageTheme.primaryTextColor, rects: textLayout.spoilers.map { $0.1.offsetBy(dx: 3.0, dy: 3.0).insetBy(dx: 1.0, dy: 1.0) }, wordRects: textLayout.spoilerWords.map { $0.1.offsetBy(dx: 3.0, dy: 3.0).insetBy(dx: 1.0, dy: 1.0) })
+                                } else if let spoilerTextNode = strongSelf.spoilerTextNode {
+                                    strongSelf.spoilerTextNode = nil
+                                    spoilerTextNode.textNode.removeFromSupernode()
+                                    
+                                    if let dustNode = strongSelf.dustNode {
+                                        strongSelf.dustNode = nil
+                                        dustNode.removeFromSupernode()
+                                    }
                                 }
-                            } else {
-                                strongSelf.statusNode.pressed = nil
+                                
+                                switch strongSelf.visibility {
+                                case .none:
+                                    strongSelf.textNode.visibilityRect = nil
+                                    strongSelf.spoilerTextNode?.visibilityRect = nil
+                                case let .visible(_, subRect):
+                                    var subRect = subRect
+                                    subRect.origin.x = 0.0
+                                    subRect.size.width = 10000.0
+                                    strongSelf.textNode.visibilityRect = subRect
+                                    strongSelf.spoilerTextNode?.visibilityRect = subRect
+                                }
+                                
+                                if let textSelectionNode = strongSelf.textSelectionNode {
+                                    let shouldUpdateLayout = textSelectionNode.frame.size != textFrame.size
+                                    textSelectionNode.frame = textFrame
+                                    textSelectionNode.highlightAreaNode.frame = textFrame
+                                    if shouldUpdateLayout {
+                                        textSelectionNode.updateLayout()
+                                    }
+                                }
+                                strongSelf.textAccessibilityOverlayNode.frame = textFrame
+                                strongSelf.textAccessibilityOverlayNode.cachedLayout = textLayout
+                                
+                                strongSelf.updateIsTranslating(isTranslating)
+                                
+                                if let statusSizeAndApply = statusSizeAndApply {
+                                    animation.animator.updateFrame(layer: strongSelf.statusNode.layer, frame: CGRect(origin: CGPoint(x: textFrameWithoutInsets.minX, y: textFrameWithoutInsets.maxY), size: statusSizeAndApply.0), completion: nil)
+                                    if strongSelf.statusNode.supernode == nil {
+                                        strongSelf.addSubnode(strongSelf.statusNode)
+                                        statusSizeAndApply.1(.None)
+                                    } else {
+                                        statusSizeAndApply.1(animation)
+                                    }
+                                } else if strongSelf.statusNode.supernode != nil {
+                                    strongSelf.statusNode.removeFromSupernode()
+                                }
+                                
+                                if let forwardInfo = item.message.forwardInfo, forwardInfo.flags.contains(.isImported) {
+                                    strongSelf.statusNode.pressed = {
+                                        guard let strongSelf = self else {
+                                            return
+                                        }
+                                        item.controllerInteraction.displayImportedMessageTooltip(strongSelf.statusNode)
+                                    }
+                                } else {
+                                    strongSelf.statusNode.pressed = nil
+                                }
                             }
                         }
                     })

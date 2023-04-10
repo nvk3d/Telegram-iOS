@@ -883,7 +883,7 @@ class ChatMessageDateAndStatusNode: ASDisplayNode {
             }
             
             return (resultingWidth, { boundingWidth in
-                return (CGSize(width: boundingWidth, height: resultingHeight), { animation in
+                return (CGSize(width: boundingWidth, height: resultingHeight), { [weak self] animation in
                     if let strongSelf = self {
                         let leftOffset = boundingWidth - layoutSize.width
                         

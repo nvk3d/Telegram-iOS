@@ -90,40 +90,47 @@ private final class ContentNode: ASDisplayNode {
         self.addSubnode(self.unclippedNode)
         self.addSubnode(self.clippedNode)
 
-        if let peer = peer {
-            if let representation = peer.smallProfileImage, let signal = peerAvatarImage(account: context.account, peerReference: PeerReference(peer._asPeer()), authorOfMessage: nil, representation: representation, displayDimensions: size, synchronousLoad: synchronousLoad) {
-                let image = generateImage(size, rotatedContext: { size, context in
-                    context.clear(CGRect(origin: CGPoint(), size: size))
-                    context.setFillColor(UIColor.lightGray.cgColor)
-                    context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
-                })!
-                self.updateImage(image: image, size: size, spacing: spacing)
+        self.asyncIfNeeded(synchronousLoad) { [weak self] in
+            guard let self = self else { return }
 
-                let disposable = (signal
-                |> deliverOnMainQueue).start(next: { [weak self] imageVersions in
-                    guard let strongSelf = self else {
-                        return
-                    }
-                    let image = imageVersions?.0
-                    if let image = image {
-                        strongSelf.updateImage(image: image, size: size, spacing: spacing)
-                    }
-                })
-                self.disposable = disposable
+            if let peer = peer {
+                if let representation = peer.smallProfileImage, let signal = peerAvatarImage(account: context.account, peerReference: PeerReference(peer._asPeer()), authorOfMessage: nil, representation: representation, displayDimensions: size, synchronousLoad: synchronousLoad) {
+                    let image = generateImage(size, rotatedContext: { size, context in
+                        context.clear(CGRect(origin: CGPoint(), size: size))
+                        context.setFillColor(UIColor.lightGray.cgColor)
+                        context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
+                    })!
+                    self.updateImage(image: image, size: size, spacing: spacing)
+
+                    let disposable = (signal
+                    |> deliverOnMainQueue).start(next: { [weak self] imageVersions in
+                        guard let strongSelf = self else {
+                            return
+                        }
+                        let image = imageVersions?.0
+                        if let image = image {
+                            strongSelf.asyncIfNeeded(synchronousLoad) { [weak strongSelf] in
+                                guard let strongSelf = strongSelf else { return }
+                                strongSelf.updateImage(image: image, size: size, spacing: spacing)
+                            }
+                        }
+                    })
+                    self.disposable = disposable
+                } else {
+                    let image = generateImage(size, rotatedContext: { size, context in
+                        context.clear(CGRect(origin: CGPoint(), size: size))
+                        drawPeerAvatarLetters(context: context, size: size, font: avatarFont, letters: peer.displayLetters, peerId: peer.id)
+                    })!
+                    self.updateImage(image: image, size: size, spacing: spacing)
+                }
             } else {
                 let image = generateImage(size, rotatedContext: { size, context in
                     context.clear(CGRect(origin: CGPoint(), size: size))
-                    drawPeerAvatarLetters(context: context, size: size, font: avatarFont, letters: peer.displayLetters, peerId: peer.id)
+                    context.setFillColor(placeholderColor.cgColor)
+                    context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
                 })!
                 self.updateImage(image: image, size: size, spacing: spacing)
             }
-        } else {
-            let image = generateImage(size, rotatedContext: { size, context in
-                context.clear(CGRect(origin: CGPoint(), size: size))
-                context.setFillColor(placeholderColor.cgColor)
-                context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
-            })!
-            self.updateImage(image: image, size: size, spacing: spacing)
         }
     }
     
@@ -143,6 +150,14 @@ private final class ContentNode: ASDisplayNode {
             context.setFillColor(UIColor.clear.cgColor)
             context.fillEllipse(in: CGRect(origin: CGPoint(), size: size).insetBy(dx: -1.5, dy: -1.5).offsetBy(dx: spacing - size.width, dy: 0.0))
         })
+    }
+
+    private func asyncIfNeeded(_ synchronous: Bool, block: @escaping () -> Void) {
+        if synchronous {
+            block()
+        } else {
+            Queue.resourceQueue().async(block)
+        }
     }
     
     deinit {

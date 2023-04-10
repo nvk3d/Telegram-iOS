@@ -370,7 +370,7 @@ public final class MediaPlayerNode: ASDisplayNode {
     public init(backgroundThread: Bool = false, captureProtected: Bool = false) {
         self.videoNode = MediaPlayerNodeDisplayNode()
         
-        if false && backgroundThread {
+        if backgroundThread {
             self.videoQueue = Queue()
         } else {
             self.videoQueue = Queue.mainQueue()

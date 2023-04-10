@@ -615,7 +615,7 @@ class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureRecognizerD
                     let animating = (currentItem != nil && currentPlaying != isPlaying) || strongSelf.animatingHeight
                     if !animating {
                         strongSelf.interactiveVideoNode.frame = videoFrame
-                        videoApply(videoLayoutData, animation)
+                        videoApply(synchronousLoads, videoLayoutData, animation)
                     }
                     
                     if currentPlaying != isPlaying {
@@ -1283,7 +1283,7 @@ class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureRecognizerD
         } else {
             videoLayoutData = .constrained(left: max(0.0, availableContentWidth - videoFrame.width), right: 0.0)
         }
-        videoApply(videoLayoutData, .None)
+        videoApply(true, videoLayoutData, .None)
         
         if let shareButtonNode = self.shareButtonNode {
             let buttonSize = shareButtonNode.frame.size

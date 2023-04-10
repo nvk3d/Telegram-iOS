@@ -1220,7 +1220,7 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
                     displayAuthorInfo = false
                 }
             }
-        
+
             if !peerId.isRepliesOrSavedMessages(accountPeerId: item.context.account.peerId) {
                 if peerId.isGroupOrChannel && effectiveAuthor != nil {
                     var isBroadcastChannel = false
@@ -1353,7 +1353,7 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
                 needsShareButton = false
             }
         }
-                
+
         var tmpWidth: CGFloat
         if allowFullWidth {
             tmpWidth = baseWidth
@@ -2452,7 +2452,8 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
         let disablesComments = !hasInstantVideo
         
         return (layout, { animation, applyInfo, synchronousLoads in
-            return ChatMessageBubbleItemNode.applyLayout(selfReference: selfReference, animation, synchronousLoads,
+            //conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { selfReference.value?.supernode == nil }) {
+            /*return*/ ChatMessageBubbleItemNode.applyLayout(selfReference: selfReference, animation, synchronousLoads,
                 params: params,
                 applyInfo: applyInfo,
                 layout: layout,
@@ -2496,7 +2497,7 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
                 avatarOffset: avatarOffset,
                 hidesHeaders: hidesHeaders,
                 disablesComments: disablesComments
-            )
+            )//}
         })
     }
     
@@ -2550,6 +2551,10 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
         guard let strongSelf = selfReference.value else {
             return
         }
+        
+        #if DEBUG
+        let time = CACurrentMediaTime()
+        #endif
         
         let previousContextFrame = strongSelf.mainContainerNode.frame
         strongSelf.mainContainerNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
@@ -2751,7 +2756,7 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
         
         let beginAt = applyInfo.timestamp ?? CACurrentMediaTime()
     
-        let timingFunction = kCAMediaTimingFunctionSpring        
+        let timingFunction = kCAMediaTimingFunctionSpring
         if let forwardInfoNode = forwardInfoSizeApply.1(bubbleContentWidth) {
             strongSelf.forwardInfoNode = forwardInfoNode
             var animateFrame = true
@@ -3104,7 +3109,9 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
         var shouldClipOnTransitions = true
         var contentNodeIndex = 0
         for (relativeFrame, _, useContentOrigin, apply) in contentNodeFramesPropertiesAndApply {
+            //conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in return strongSelf == nil || strongSelf?.supernode == nil }) {
             apply(animation, synchronousLoads, applyInfo)
+            //}
             
             if contentNodeIndex >= strongSelf.contentNodes.count {
                 break
@@ -3407,6 +3414,9 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
             f()
         }
 
+        #if DEBUG
+        print("apply layout time: \(CACurrentMediaTime() - time)")
+        #endif
     }
     
     override func updateAccessibilityData(_ accessibilityData: ChatMessageAccessibilityData) {

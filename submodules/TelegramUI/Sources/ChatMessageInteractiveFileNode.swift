@@ -1104,7 +1104,7 @@ final class ChatMessageInteractiveFileNode: ASDisplayNode {
                                 let indicatorComponent: AnyComponent<Empty>
                                 indicatorComponent = AnyComponent(AudioTranscriptionPendingLottieIndicatorComponent(color: messageTheme.primaryTextColor, font: textFont))
                                 //indicatorComponent = AnyComponent(AudioTranscriptionPendingIndicatorComponent(color: messageTheme.primaryTextColor, font: textFont))
-                                
+
                                 let indicatorSize = transcriptionPendingIndicator.update(
                                     transition: .immediate,
                                     component: indicatorComponent,
@@ -1285,44 +1285,64 @@ final class ChatMessageInteractiveFileNode: ASDisplayNode {
                             }
                             
                             if var updatedStatusSignal = updatedStatusSignal {
-                                if strongSelf.file?.isInstantVideo == true {
-                                    updatedStatusSignal = updatedStatusSignal
-                                    |> mapToThrottled { next -> Signal<(FileMediaResourceStatus, MediaResourceStatus?), NoError> in
-                                        return .single(next) |> then(.complete() |> delay(0.1, queue: Queue.concurrentDefaultQueue()))
-                                    }
-                                }
-                                strongSelf.statusDisposable.set((updatedStatusSignal |> deliverOnMainQueue).start(next: { [weak strongSelf] status, actualFetchStatus in
-                                    displayLinkDispatcher.dispatch {
-                                        if let strongSelf = strongSelf {
-                                            let firstTime = strongSelf.resourceStatus == nil
-                                            strongSelf.resourceStatus = status
-                                            strongSelf.actualFetchStatus = actualFetchStatus
-                                            strongSelf.updateStatus(animated: !synchronousLoads || !firstTime)
+                                let file = strongSelf.file
+                                let statusDisposable = strongSelf.statusDisposable
+
+                                strongSelf.asyncIfNeeded(synchronousLoads || animation.isAnimated) { [weak strongSelf] in
+                                    guard let strongSelf = strongSelf else { return }
+                                    if file?.isInstantVideo == true {
+                                        updatedStatusSignal = updatedStatusSignal
+                                        |> mapToThrottled { next -> Signal<(FileMediaResourceStatus, MediaResourceStatus?), NoError> in
+                                            return .single(next) |> then(.complete() |> delay(0.1, queue: Queue.concurrentDefaultQueue()))
                                         }
                                     }
-                                }))
+                                    statusDisposable.set((updatedStatusSignal |> deliverOnMainQueue).start(next: { [weak strongSelf] status, actualFetchStatus in
+                                        guard let strongSelf = strongSelf else { return }
+
+                                        conditionerDisplayed(weight: .s, immediate: false, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil }) { [weak strongSelf] in
+                                            if let strongSelf = strongSelf {
+                                                let firstTime = strongSelf.resourceStatus == nil
+                                                strongSelf.resourceStatus = status
+                                                strongSelf.actualFetchStatus = actualFetchStatus
+                                                strongSelf.updateStatus(animated: !synchronousLoads || !firstTime)
+                                            }
+                                        }
+                                    }))
+                                }
                             }
                             
                             if let updatedAudioLevelEventsSignal = updatedAudioLevelEventsSignal {
-                                strongSelf.audioLevelEventsDisposable.set((updatedAudioLevelEventsSignal
-                                |> deliverOnMainQueue).start(next: { value in
-                                    guard let strongSelf = self else {
-                                        return
-                                    }
-                                    strongSelf.inputAudioLevel = CGFloat(value)
-                                    strongSelf.playbackAudioLevelNode?.updateLevel(CGFloat(value))
-                                }))
+                                let audioLevelEventsDisposable = strongSelf.audioLevelEventsDisposable
+
+                                strongSelf.asyncIfNeeded(synchronousLoads || animation.isAnimated) { [weak strongSelf] in
+                                    guard let strongSelf = strongSelf else { return }
+
+                                    audioLevelEventsDisposable.set((updatedAudioLevelEventsSignal
+                                    |> deliverOnMainQueue).start(next: { [weak strongSelf] value in
+                                        guard let strongSelf = strongSelf else { return }
+                                        strongSelf.inputAudioLevel = CGFloat(value)
+                                        strongSelf.playbackAudioLevelNode?.updateLevel(CGFloat(value))
+                                    }))
+                                }
                             }
                             
                             if let updatedPlaybackStatusSignal = updatedPlaybackStatusSignal {
-                                strongSelf.playbackStatus.set(updatedPlaybackStatusSignal)
-                                strongSelf.playbackStatusDisposable.set((updatedPlaybackStatusSignal |> deliverOnMainQueue).start(next: { [weak strongSelf] status in
-                                    displayLinkDispatcher.dispatch {
-                                        if let strongSelf = strongSelf {
-                                            strongSelf.playerStatus = status
+                                let playbackStatus = strongSelf.playbackStatus
+                                let playbackStatusDisposable = strongSelf.playbackStatusDisposable
+
+                                strongSelf.asyncIfNeeded(synchronousLoads || animation.isAnimated) { [weak strongSelf] in
+                                    guard let strongSelf = strongSelf else { return }
+
+                                    playbackStatus.set(updatedPlaybackStatusSignal)
+                                    playbackStatusDisposable.set((updatedPlaybackStatusSignal |> deliverOnMainQueue).start(next: { [weak strongSelf] status in
+                                        guard let strongSelf = strongSelf else { return }
+                                        conditionerDisplayed(weight: .xxs, immediate: false, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil}) { [weak strongSelf] in
+                                            if let strongSelf = strongSelf {
+                                                strongSelf.playerStatus = status
+                                            }
                                         }
-                                    }
-                                }))
+                                    }))
+                                }
                             }
                                                         
                             strongSelf.statusNode?.displaysAsynchronously = !arguments.presentationData.isPreview
@@ -1338,9 +1358,12 @@ final class ChatMessageInteractiveFileNode: ASDisplayNode {
                             strongSelf.fileIconImage = fileIconImage
 
                             if let updatedFetchControls = updatedFetchControls {
-                                let _ = strongSelf.fetchControls.swap(updatedFetchControls)
-                                if arguments.automaticDownload {
-                                    updatedFetchControls.fetch(false)
+                                let fetchControls = strongSelf.fetchControls
+                                strongSelf.asyncIfNeeded(synchronousLoads || animation.isAnimated) {
+                                    let _ = fetchControls.swap(updatedFetchControls)
+                                    if arguments.automaticDownload {
+                                        updatedFetchControls.fetch(false)
+                                    }
                                 }
                             }
                             
@@ -1408,6 +1431,14 @@ final class ChatMessageInteractiveFileNode: ASDisplayNode {
                     })
                 })
             })
+        }
+    }
+
+    private func asyncIfNeeded(_ synchronous: Bool, block: @escaping () -> Void) {
+        if synchronous {
+            block()
+        } else {
+            Queue.resourceQueue().async(block)
         }
     }
     
@@ -1590,7 +1621,7 @@ final class ChatMessageInteractiveFileNode: ASDisplayNode {
                             break
                         }
                     }
-                    
+
                     image = playerAlbumArt(postbox: context.account.postbox, engine: context.engine, fileReference: .message(message: MessageReference(message), media: file), albumArt: .init(thumbnailResource: ExternalMusicAlbumArtResource(file: .message(message: MessageReference(message), media: file), title: title ?? "", performer: performer ?? "", isThumbnail: true), fullSizeResource: ExternalMusicAlbumArtResource(file: .message(message: MessageReference(message), media: file), title: title ?? "", performer: performer ?? "", isThumbnail: false)), thumbnail: true, overlayColor: UIColor(white: 0.0, alpha: 0.3), drawPlaceholderWhenEmpty: false, attemptSynchronously: !animated)
                 }
             }

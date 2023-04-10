@@ -343,4 +343,3 @@ public final class ConstantDisplayLinkAnimator {
         self.update()
     }
 }
-

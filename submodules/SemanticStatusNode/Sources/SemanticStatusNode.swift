@@ -866,20 +866,21 @@ public final class SemanticStatusNode: ASControlNode {
         
     public func setBackgroundImage(_ image: Signal<(TransformImageArguments) -> DrawingContext?, NoError>) {
         let start = CACurrentMediaTime()
-        self.disposable = combineLatest(queue: Queue.mainQueue(), image, self.hasLayoutPromise.get()).start(next: { [weak self] transform, ready in
-            guard let strongSelf = self, ready else {
-                return
+        self.disposable = combineLatest(queue: Queue.resourceQueue(), image, self.hasLayoutPromise.get()).start(next: { [weak self] transform, ready in
+            guard let strongSelf = self, ready else { return }
+
+            Queue.mainQueue().async {
+                let context = transform(TransformImageArguments(corners: ImageCorners(radius: strongSelf.bounds.width / 2.0), imageSize: strongSelf.bounds.size, boundingSize: strongSelf.bounds.size, intrinsicInsets: UIEdgeInsets()))
+
+                let previousAppearanceContext = strongSelf.appearanceContext
+                strongSelf.appearanceContext = strongSelf.appearanceContext.withUpdatedBackgroundImage(context?.generateImage())
+
+                if CACurrentMediaTime() - start > 0.3 {
+                    strongSelf.transitionContext = SemanticStatusNodeTransitionContext(startTime: CACurrentMediaTime(), duration: 0.18, previousStateContext: nil, previousAppearanceContext: previousAppearanceContext, completion: {})
+                    strongSelf.updateAnimations()
+                }
+                strongSelf.setNeedsDisplay()
             }
-            let context = transform(TransformImageArguments(corners: ImageCorners(radius: strongSelf.bounds.width / 2.0), imageSize: strongSelf.bounds.size, boundingSize: strongSelf.bounds.size, intrinsicInsets: UIEdgeInsets()))
-            
-            let previousAppearanceContext = strongSelf.appearanceContext
-            strongSelf.appearanceContext = strongSelf.appearanceContext.withUpdatedBackgroundImage(context?.generateImage())
-            
-            if CACurrentMediaTime() - start > 0.3 {
-                strongSelf.transitionContext = SemanticStatusNodeTransitionContext(startTime: CACurrentMediaTime(), duration: 0.18, previousStateContext: nil, previousAppearanceContext: previousAppearanceContext, completion: {})
-                strongSelf.updateAnimations()
-            }
-            strongSelf.setNeedsDisplay()
         })
     }
     

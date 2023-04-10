@@ -107,6 +107,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
     private let playbackStatusDisposable = MetaDisposable()
     private let playerStatusDisposable = MetaDisposable()
     private let fetchedThumbnailDisposable = MetaDisposable()
+    private var immediateUpdates: Bool = false
     
     private var shouldAcquireVideoContext: Bool {
         if self.visibility && self.trackingIsInHierarchy && !self.canAttachContent {
@@ -209,7 +210,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
         self.layer.addSublayer(hierarchyTrackingLayer)
     }
     
-    func asyncLayout() -> (_ item: ChatMessageBubbleContentItem, _ width: CGFloat, _ displaySize: CGSize, _ maximumDisplaySize: CGSize, _ scaleProgress: CGFloat, _ statusType: ChatMessageInteractiveInstantVideoNodeStatusType, _ automaticDownload: Bool, _ avatarInset: CGFloat) -> (ChatMessageInstantVideoItemLayoutResult, (ChatMessageInstantVideoItemLayoutData, ListViewItemUpdateAnimation) -> Void) {
+    func asyncLayout() -> (_ item: ChatMessageBubbleContentItem, _ width: CGFloat, _ displaySize: CGSize, _ maximumDisplaySize: CGSize, _ scaleProgress: CGFloat, _ statusType: ChatMessageInteractiveInstantVideoNodeStatusType, _ automaticDownload: Bool, _ avatarInset: CGFloat) -> (ChatMessageInstantVideoItemLayoutResult, (Bool, ChatMessageInstantVideoItemLayoutData, ListViewItemUpdateAnimation) -> Void) {
         let previousFile = self.media
         
         let currentItem = self.item
@@ -556,7 +557,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
             
             let effectiveAudioTranscriptionState = updatedAudioTranscriptionState ?? audioTranscriptionState
                         
-            return (result, { [weak self] layoutData, animation in
+            return (result, { [weak self] synchronousLoads, layoutData, animation in
                 if let strongSelf = self {
                     strongSelf.item = item
                     strongSelf.videoFrame = displayVideoFrame
@@ -611,10 +612,13 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                         let muteIconFrame = CGRect(origin: CGPoint(x: infoBackgroundFrame.width - muteImage.size.width, y: 0.0), size: muteImage.size)
                         strongSelf.muteIconNode.frame = muteIconFrame
                     }
-                    
+
                     if let updatedFile = updatedFile, updatedMedia {
                         if let resource = updatedFile.previewRepresentations.first?.resource {
-                            strongSelf.fetchedThumbnailDisposable.set(fetchedMediaResource(mediaBox: item.context.account.postbox.mediaBox, userLocation: .peer(item.message.id.peerId), userContentType: .video, reference: FileMediaReference.message(message: MessageReference(item.message), media: updatedFile).resourceReference(resource)).start())
+                            let fetchedThumbnailDisposable = strongSelf.fetchedThumbnailDisposable
+                            strongSelf.asyncIfNeeded(synchronousLoads || animation.isAnimated) {
+                                fetchedThumbnailDisposable.set(fetchedMediaResource(mediaBox: item.context.account.postbox.mediaBox, userLocation: .peer(item.message.id.peerId), userContentType: .video, reference: FileMediaReference.message(message: MessageReference(item.message), media: updatedFile).resourceReference(resource)).start())
+                            }
                         } else {
                             strongSelf.fetchedThumbnailDisposable.set(nil)
                         }
@@ -635,7 +639,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                                 durationTextColor = theme.theme.chat.message.outgoing.secondaryTextColor
                             }
                     }
-                    
+
                     var previousVideoNode: UniversalVideoNode?
                     var updatedPlayerStatusSignal: Signal<MediaPlayerStatus?, NoError>?
                     if let telegramFile = updatedFile {
@@ -663,9 +667,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                                 strongSelf.durationNode = durationNode
                                 strongSelf.addSubnode(durationNode)
                                 durationNode.sizeUpdated = { [weak strongSelf] size in
-                                    guard let strongSelf = strongSelf else {
-                                        return
-                                    }
+                                    guard let strongSelf = strongSelf else { return }
                                     if let durationBackgroundNode = strongSelf.durationBackgroundNode, let durationNode = strongSelf.durationNode {
                                         durationBackgroundNode.frame = CGRect(origin: CGPoint(x: durationNode.frame.maxX - size.width, y: durationNode.frame.minY), size: size)
                                         durationBackgroundNode.update(size: size, cornerRadius: size.height / 2.0, transition: .immediate)
@@ -690,7 +692,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                                         }
                                     }
                                 }
-                            }), content: NativeVideoContent(id: .message(item.message.stableId, telegramFile.fileId), userLocation: .peer(item.message.id.peerId), fileReference: .message(message: MessageReference(item.message), media: telegramFile), streamVideo: streamVideo ? .conservative : .none, enableSound: false, fetchAutomatically: false, captureProtected: item.message.isCopyProtected(), storeAfterDownload: nil), priority: .embedded, autoplay: item.context.sharedContext.energyUsageSettings.autoplayVideo)
+                            }), content: NativeVideoContent(id: .message(item.message.stableId, telegramFile.fileId), userLocation: .peer(item.message.id.peerId), fileReference: .message(message: MessageReference(item.message), media: telegramFile), streamVideo: streamVideo ? .conservative : .none, enableSound: false, fetchAutomatically: false, captureProtected: item.message.isCopyProtected(), asyncContentCreation: !synchronousLoads && !animation.isAnimated, storeAfterDownload: nil), priority: .embedded, autoplay: item.context.sharedContext.energyUsageSettings.autoplayVideo)
                             if let previousVideoNode = previousVideoNode {
                                 videoNode.bounds = previousVideoNode.bounds
                                 videoNode.position = previousVideoNode.position
@@ -699,7 +701,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                             strongSelf.videoNode = videoNode
                             strongSelf.insertSubnode(videoNode, belowSubnode: previousVideoNode ?? strongSelf.dateAndStatusNode)
                             videoNode.canAttachContent = strongSelf.shouldAcquireVideoContext
-                        
+
                             if isSecretMedia {
                                 let updatedSecretPlaceholderSignal = chatSecretMessageVideo(account: item.context.account, userLocation: .peer(item.message.id.peerId), videoReference: .message(message: MessageReference(item.message), media: telegramFile))
                                 strongSelf.secretVideoPlaceholder.setSignal(updatedSecretPlaceholderSignal)
@@ -719,26 +721,47 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                             }
                         }
                     }
-                    
+
                     if let updatedPlaybackStatus = updatedPlaybackStatus {
-                        strongSelf.playbackStatusDisposable.set((updatedPlaybackStatus
-                        |> deliverOnMainQueue).start(next: { status in
-                            if let strongSelf = self {
-                                strongSelf.status = status
-                                strongSelf.updateStatus(animator: nil)
-                            }
-                        }))
-                    }
-                    
-                    if let updatedPlayerStatusSignal = updatedPlayerStatusSignal {
-                        strongSelf.playerStatusDisposable.set((updatedPlayerStatusSignal
-                        |> deliverOnMainQueue).start(next: { [weak self] status in
-                            displayLinkDispatcher.dispatch {
+                        let playbackStatusDisposable = strongSelf.playbackStatusDisposable
+                        strongSelf.asyncIfNeeded(synchronousLoads || animation.isAnimated) { [weak self] in
+                            guard let self = self else { return }
+
+                            playbackStatusDisposable.set((updatedPlaybackStatus
+                            |> deliverOnMainQueue).start(next: { [weak self] status in
                                 if let strongSelf = self {
-                                    strongSelf.playerStatus = status
+                                    strongSelf.status = status
+                                    strongSelf.updateStatus(animator: nil)
                                 }
-                            }
-                        }))
+                            }))
+                        }
+                    }
+
+                    strongSelf.immediateUpdates = synchronousLoads || animation.isAnimated
+                    if let updatedPlayerStatusSignal = updatedPlayerStatusSignal {
+                        let playerStatusDisposable = strongSelf.playerStatusDisposable
+                        strongSelf.asyncIfNeeded(synchronousLoads || animation.isAnimated) { [weak strongSelf] in
+                            guard let strongSelf = strongSelf else { return }
+
+                            playerStatusDisposable.set((updatedPlayerStatusSignal
+                            |> deliverOnMainQueue).start(next: { [weak strongSelf] status in
+                                guard let strongSelf = strongSelf else { return }
+
+                                if strongSelf.immediateUpdates {
+                                    displayLinkDispatcher.dispatch { [weak strongSelf] in
+                                        if let strongSelf = strongSelf {
+                                            strongSelf.playerStatus = status
+                                        }
+                                    }
+                                } else {
+                                    conditionerDisplayed(weight: .s, immediate: false, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) { [weak strongSelf] in
+                                        if let strongSelf = strongSelf {
+                                            strongSelf.playerStatus = status
+                                        }
+                                    }
+                                }
+                            }))
+                        }
                     }
                                         
                     var displayTranscribe: Bool
@@ -832,8 +855,9 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                             animation.animator.updateFrame(layer: durationNode.layer, frame: durationFrame, completion: nil)
                         }
                     }
-                    
+
                     dateAndStatusApply(animation)
+
                     switch layoutData {
                     case let .unconstrained(width):
                         var dateAndStatusOrigin: CGPoint
@@ -874,16 +898,19 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     strongSelf.secretVideoPlaceholder.bounds = CGRect(origin: CGPoint(), size: videoFrame.size)
                     animation.animator.updateScale(layer: strongSelf.secretVideoPlaceholder.layer, scale: imageScale, completion: nil)
                     animation.animator.updatePosition(layer: strongSelf.secretVideoPlaceholder.layer, position: displayVideoFrame.center, completion: nil)
-                    
+
                     let makeSecretPlaceholderLayout = strongSelf.secretVideoPlaceholder.asyncLayout()
                     let arguments = TransformImageArguments(corners: ImageCorners(radius: placeholderFrame.size.width / 2.0), imageSize: placeholderFrame.size, boundingSize: placeholderFrame.size, intrinsicInsets: UIEdgeInsets())
                     let applySecretPlaceholder = makeSecretPlaceholderLayout(arguments)
                     applySecretPlaceholder()
-                    
+
                     strongSelf.updateStatus(animator: animation.animator)
-                    
+
                     if let telegramFile = updatedFile, previousAutomaticDownload != automaticDownload, automaticDownload {
-                        strongSelf.fetchDisposable.set(messageMediaFileInteractiveFetched(context: item.context, message: item.message, file: telegramFile, userInitiated: false).start())
+                        let fetchDisposable = strongSelf.fetchDisposable
+                        strongSelf.asyncIfNeeded(synchronousLoads || animation.isAnimated) {
+                            fetchDisposable.set(messageMediaFileInteractiveFetched(context: item.context, message: item.message, file: telegramFile, userInitiated: false).start())
+                        }
                     }
                     
                     if let forwardInfo = item.message.forwardInfo, forwardInfo.flags.contains(.isImported) {
@@ -965,7 +992,7 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                             strongSelf.forwardInfoNode = nil
                         }
                     }
-                    
+
                     if let (replyInfoSize, replyInfoApply) = replyInfoApply {
                         let replyInfoNode = replyInfoApply(false)
                         if strongSelf.replyInfoNode == nil {
@@ -1004,6 +1031,14 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     }
                 }
             })
+        }
+    }
+
+    private func asyncIfNeeded(_ synchronous: Bool, block: @escaping () -> Void) {
+        if synchronous {
+            block()
+        } else {
+            Queue.resourceQueue().async(block)
         }
     }
     
@@ -1403,11 +1438,11 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
         return nil
     }
 
-    static func asyncLayout(_ node: ChatMessageInteractiveInstantVideoNode?) -> (_ item: ChatMessageBubbleContentItem, _ width: CGFloat, _ displaySize: CGSize, _ maximumDisplaySize: CGSize, _ scaleProgress: CGFloat, _ statusType: ChatMessageInteractiveInstantVideoNodeStatusType, _ automaticDownload: Bool, _ avatarInset: CGFloat) -> (ChatMessageInstantVideoItemLayoutResult, (ChatMessageInstantVideoItemLayoutData, ListViewItemUpdateAnimation) -> ChatMessageInteractiveInstantVideoNode) {
+    static func asyncLayout(_ node: ChatMessageInteractiveInstantVideoNode?) -> (_ item: ChatMessageBubbleContentItem, _ width: CGFloat, _ displaySize: CGSize, _ maximumDisplaySize: CGSize, _ scaleProgress: CGFloat, _ statusType: ChatMessageInteractiveInstantVideoNodeStatusType, _ automaticDownload: Bool, _ avatarInset: CGFloat) -> (ChatMessageInstantVideoItemLayoutResult, (Bool, ChatMessageInstantVideoItemLayoutData, ListViewItemUpdateAnimation) -> ChatMessageInteractiveInstantVideoNode) {
         let makeLayout = node?.asyncLayout()
         return { item, width, displaySize, maximumDisplaySize, scaleProgress, statusType, automaticDownload, avatarInset in
             var createdNode: ChatMessageInteractiveInstantVideoNode?
-            let sizeAndApplyLayout: (ChatMessageInstantVideoItemLayoutResult, (ChatMessageInstantVideoItemLayoutData, ListViewItemUpdateAnimation) -> Void)
+            let sizeAndApplyLayout: (ChatMessageInstantVideoItemLayoutResult, (Bool, ChatMessageInstantVideoItemLayoutData, ListViewItemUpdateAnimation) -> Void)
             if let makeLayout = makeLayout {
                 sizeAndApplyLayout = makeLayout(item, width, displaySize, maximumDisplaySize, scaleProgress, statusType, automaticDownload, avatarInset)
             } else {
@@ -1415,8 +1450,8 @@ class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                 sizeAndApplyLayout = node.asyncLayout()(item, width, displaySize, maximumDisplaySize, scaleProgress, statusType, automaticDownload, avatarInset)
                 createdNode = node
             }
-            return (sizeAndApplyLayout.0, { [weak node] layoutData, transition in
-                sizeAndApplyLayout.1(layoutData, transition)
+            return (sizeAndApplyLayout.0, { [weak node] synchronousLoads, layoutData, transition in
+                sizeAndApplyLayout.1(synchronousLoads, layoutData, transition)
                 if let createdNode = createdNode {
                     return createdNode
                 } else {

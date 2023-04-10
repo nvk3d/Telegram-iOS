@@ -901,8 +901,10 @@ public final class ReactionButtonAsyncNode: ContextControllerSourceView {
                     updatedItem = ReactionNodePool.shared.take()
                     animation = .None
                 }
-                
-                updatedItem.view.apply(layout: layout, animation: animation, arguments: arguments)
+
+                DisplayLinkConditioner.shared.add(weight: .xxs, isOutdated: { [weak updatedItem] in updatedItem?.view.superview == nil }) {
+                    updatedItem.view.apply(layout: layout, animation: animation, arguments: arguments)
+                }
                 
                 return updatedItem
             })
@@ -1210,7 +1212,11 @@ public final class ReactionButtonsAsyncLayoutContainer {
                     items.append(ApplyResult.Item(value: key, node: nodeItem, size: size))
                     
                     if let current = self.buttons[key] {
-                        assert(current === nodeItem)
+                        //assert(current === nodeItem)
+                        if current !== nodeItem {
+                            removedNodes.append(current)
+                            self.buttons[key] = nodeItem
+                        }
                     } else {
                         self.buttons[key] = nodeItem
                     }

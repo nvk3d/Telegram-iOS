@@ -315,49 +315,51 @@ class ChatMessageMediaBubbleContentNode: ChatMessageBubbleContentNode {
                             strongSelf.item = item
                             strongSelf.media = selectedMedia
                             strongSelf.automaticPlayback = automaticPlayback
-                            
-                            let imageFrame = CGRect(origin: CGPoint(x: bubbleInsets.left, y: bubbleInsets.top), size: imageSize)
-                            
-                            animation.animator.updateFrame(layer: strongSelf.interactiveImageNode.layer, frame: imageFrame, completion: nil)
-                            
-                            imageApply(animation, synchronousLoads)
-                            
-                            if let selection = selection {
-                                if let selectionNode = strongSelf.selectionNode {
-                                    selectionNode.frame = imageFrame
-                                    selectionNode.updateSelected(selection, animated: animation.isAnimated)
-                                } else {
-                                    let selectionNode = GridMessageSelectionNode(theme: item.presentationData.theme.theme, toggle: { value in
-                                        item.controllerInteraction.toggleMessagesSelection([item.message.id], value)
-                                    })
-                                    strongSelf.selectionNode = selectionNode
-                                    strongSelf.addSubnode(selectionNode)
-                                    selectionNode.frame = imageFrame
-                                    selectionNode.updateSelected(selection, animated: false)
+
+                            conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) {
+                                let imageFrame = CGRect(origin: CGPoint(x: bubbleInsets.left, y: bubbleInsets.top), size: imageSize)
+                                
+                                animation.animator.updateFrame(layer: strongSelf.interactiveImageNode.layer, frame: imageFrame, completion: nil)
+                                
+                                imageApply(animation, synchronousLoads)
+                                
+                                if let selection = selection {
+                                    if let selectionNode = strongSelf.selectionNode {
+                                        selectionNode.frame = imageFrame
+                                        selectionNode.updateSelected(selection, animated: animation.isAnimated)
+                                    } else {
+                                        let selectionNode = GridMessageSelectionNode(theme: item.presentationData.theme.theme, toggle: { value in
+                                            item.controllerInteraction.toggleMessagesSelection([item.message.id], value)
+                                        })
+                                        strongSelf.selectionNode = selectionNode
+                                        strongSelf.addSubnode(selectionNode)
+                                        selectionNode.frame = imageFrame
+                                        selectionNode.updateSelected(selection, animated: false)
+                                        if animation.isAnimated {
+                                            selectionNode.animateIn()
+                                        }
+                                    }
+                                } else if let selectionNode = strongSelf.selectionNode {
+                                    strongSelf.selectionNode = nil
                                     if animation.isAnimated {
-                                        selectionNode.animateIn()
+                                        selectionNode.animateOut(completion: { [weak selectionNode] in
+                                            selectionNode?.removeFromSupernode()
+                                        })
+                                    } else {
+                                        selectionNode.removeFromSupernode()
                                     }
                                 }
-                            } else if let selectionNode = strongSelf.selectionNode {
-                                strongSelf.selectionNode = nil
-                                if animation.isAnimated {
-                                    selectionNode.animateOut(completion: { [weak selectionNode] in
-                                        selectionNode?.removeFromSupernode()
-                                    })
+                                
+                                if let forwardInfo = item.message.forwardInfo, forwardInfo.flags.contains(.isImported) {
+                                    strongSelf.interactiveImageNode.dateAndStatusNode.pressed = {
+                                        guard let strongSelf = self else {
+                                            return
+                                        }
+                                        item.controllerInteraction.displayImportedMessageTooltip(strongSelf.interactiveImageNode.dateAndStatusNode)
+                                    }
                                 } else {
-                                    selectionNode.removeFromSupernode()
+                                    strongSelf.interactiveImageNode.dateAndStatusNode.pressed = nil
                                 }
-                            }
-                            
-                            if let forwardInfo = item.message.forwardInfo, forwardInfo.flags.contains(.isImported) {
-                                strongSelf.interactiveImageNode.dateAndStatusNode.pressed = {
-                                    guard let strongSelf = self else {
-                                        return
-                                    }
-                                    item.controllerInteraction.displayImportedMessageTooltip(strongSelf.interactiveImageNode.dateAndStatusNode)
-                                }
-                            } else {
-                                strongSelf.interactiveImageNode.dateAndStatusNode.pressed = nil
                             }
                         }
                     })

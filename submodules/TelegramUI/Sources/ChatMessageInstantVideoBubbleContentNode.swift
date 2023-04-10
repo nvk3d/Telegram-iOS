@@ -349,11 +349,15 @@ class ChatMessageInstantVideoBubbleContentNode: ChatMessageBubbleContentNode {
                             }
 
                             animation.animator.updateFrame(layer: strongSelf.interactiveVideoNode.layer, frame: videoFrame, completion: nil)
-                            videoApply(videoLayoutData, videoAnimation)
+                            conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) {
+                                videoApply(synchronousLoads, videoLayoutData, videoAnimation)
+                            }
                             
                             if let fileSize = finalFileSize {
                                 strongSelf.interactiveFileNode.frame = CGRect(origin: CGPoint(x: layoutConstants.file.bubbleInsets.left, y: layoutConstants.file.bubbleInsets.top), size: fileSize)
-                                finalFileApply?(synchronousLoads, fileAnimation, applyInfo)
+                                conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) {
+                                    finalFileApply?(synchronousLoads, fileAnimation, applyInfo)
+                                }
                             }
                             
                             if currentExpanded != isExpanded {

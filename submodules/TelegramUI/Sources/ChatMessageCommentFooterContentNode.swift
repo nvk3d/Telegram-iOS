@@ -264,125 +264,129 @@ final class ChatMessageCommentFooterContentNode: ChatMessageBubbleContentNode {
                             strongSelf.alternativeCountNode.isHidden = !strongSelf.countNode.isHidden
                             
                             strongSelf.buttonNode.accessibilityLabel = accessibilityLabel
-                            
-                            let _ = countApply(animation.isAnimated)
-                            let _ = alternativeCountApply(animation.isAnimated)
-                            
-                            let adjustedTextFrame = textFrame
-                            
-                            if strongSelf.countNode.frame.isEmpty {
-                                strongSelf.countNode.frame = adjustedTextFrame
-                            } else {
-                                transition.updateFrameAdditive(node: strongSelf.countNode, frame: adjustedTextFrame)
-                            }
-                            
-                            if strongSelf.alternativeCountNode.frame.isEmpty {
-                                strongSelf.alternativeCountNode.frame = CGRect(origin: adjustedTextFrame.origin, size: alternativeCountLayout.size)
-                            } else {
-                                transition.updateFrameAdditive(node: strongSelf.alternativeCountNode, frame: CGRect(origin: adjustedTextFrame.origin, size: alternativeCountLayout.size))
-                            }
-                            
-                            let effectiveTextFrame: CGRect
-                            if !strongSelf.alternativeCountNode.isHidden {
-                                effectiveTextFrame = strongSelf.alternativeCountNode.frame
-                            } else {
-                                effectiveTextFrame = strongSelf.countNode.frame
-                            }
-                            
-                            if let iconImage = iconImage {
-                                strongSelf.iconNode.image = iconImage
-                                strongSelf.iconNode.frame = CGRect(origin: CGPoint(x: 15.0 + iconOffset.x, y: 6.0 + iconOffset.y + topOffset), size: iconImage.size)
-                            }
 
-                            if let arrowImage = arrowImage {
-                                strongSelf.arrowNode.image = arrowImage
-                                let arrowFrame = CGRect(origin: CGPoint(x: boundingWidth - 33.0, y: 6.0 + topOffset), size: arrowImage.size)
-                                if strongSelf.arrowNode.frame.isEmpty {
-                                    strongSelf.arrowNode.frame = arrowFrame
+                            conditionerDisplayed(weight: .m, immediate: synchronousLoad || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) { [weak strongSelf] in
+                                guard let strongSelf = strongSelf else { return }
+
+                                let _ = countApply(animation.isAnimated)
+                                let _ = alternativeCountApply(animation.isAnimated)
+
+                                let adjustedTextFrame = textFrame
+
+                                if strongSelf.countNode.frame.isEmpty {
+                                    strongSelf.countNode.frame = adjustedTextFrame
                                 } else {
-                                    transition.updateFrameAdditive(node: strongSelf.arrowNode, frame: arrowFrame)
+                                    transition.updateFrameAdditive(node: strongSelf.countNode, frame: adjustedTextFrame)
                                 }
-                                
-                                if let unreadIconImage = unreadIconImage {
-                                    strongSelf.unreadIconNode.image = unreadIconImage
-                                    
-                                    let unreadIconFrame = CGRect(origin: CGPoint(x: effectiveTextFrame.maxX + 4.0, y: effectiveTextFrame.minY + floor((effectiveTextFrame.height - unreadIconImage.size.height) / 2.0) + 1.0), size: unreadIconImage.size)
-                                    
-                                    if strongSelf.unreadIconNode.frame.isEmpty {
-                                        strongSelf.unreadIconNode.frame = unreadIconFrame
+
+                                if strongSelf.alternativeCountNode.frame.isEmpty {
+                                    strongSelf.alternativeCountNode.frame = CGRect(origin: adjustedTextFrame.origin, size: alternativeCountLayout.size)
+                                } else {
+                                    transition.updateFrameAdditive(node: strongSelf.alternativeCountNode, frame: CGRect(origin: adjustedTextFrame.origin, size: alternativeCountLayout.size))
+                                }
+
+                                let effectiveTextFrame: CGRect
+                                if !strongSelf.alternativeCountNode.isHidden {
+                                    effectiveTextFrame = strongSelf.alternativeCountNode.frame
+                                } else {
+                                    effectiveTextFrame = strongSelf.countNode.frame
+                                }
+
+                                if let iconImage = iconImage {
+                                    strongSelf.iconNode.image = iconImage
+                                    strongSelf.iconNode.frame = CGRect(origin: CGPoint(x: 15.0 + iconOffset.x, y: 6.0 + iconOffset.y + topOffset), size: iconImage.size)
+                                }
+
+                                if let arrowImage = arrowImage {
+                                    strongSelf.arrowNode.image = arrowImage
+                                    let arrowFrame = CGRect(origin: CGPoint(x: boundingWidth - 33.0, y: 6.0 + topOffset), size: arrowImage.size)
+                                    if strongSelf.arrowNode.frame.isEmpty {
+                                        strongSelf.arrowNode.frame = arrowFrame
                                     } else {
-                                        transition.updateFrameAdditive(node: strongSelf.unreadIconNode, frame: unreadIconFrame)
+                                        transition.updateFrameAdditive(node: strongSelf.arrowNode, frame: arrowFrame)
+                                    }
+
+                                    if let unreadIconImage = unreadIconImage {
+                                        strongSelf.unreadIconNode.image = unreadIconImage
+
+                                        let unreadIconFrame = CGRect(origin: CGPoint(x: effectiveTextFrame.maxX + 4.0, y: effectiveTextFrame.minY + floor((effectiveTextFrame.height - unreadIconImage.size.height) / 2.0) + 1.0), size: unreadIconImage.size)
+
+                                        if strongSelf.unreadIconNode.frame.isEmpty {
+                                            strongSelf.unreadIconNode.frame = unreadIconFrame
+                                        } else {
+                                            transition.updateFrameAdditive(node: strongSelf.unreadIconNode, frame: unreadIconFrame)
+                                        }
                                     }
                                 }
-                            }
-                            
-                            if strongSelf.unreadIconNode.alpha.isZero != !hasUnseenReplies {
-                                transition.updateAlpha(node: strongSelf.unreadIconNode, alpha: hasUnseenReplies ? 1.0 : 0.0)
-                                if hasUnseenReplies {
-                                    strongSelf.unreadIconNode.layer.animateSpring(from: 0.1 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: 0.5, initialVelocity: 0.0)
-                                }
-                            }
-                            
-                            let hasActivity = item.controllerInteraction.currentMessageWithLoadingReplyThread == item.message.id
-                            
-                            if hasActivity {
-                                strongSelf.arrowNode.isHidden = true
-                                let statusNode: RadialStatusNode
-                                if let current = strongSelf.statusNode {
-                                    statusNode = current
-                                } else {
-                                    statusNode = RadialStatusNode(backgroundNodeColor: .clear)
-                                    strongSelf.statusNode = statusNode
-                                    strongSelf.buttonNode.addSubnode(statusNode)
-                                }
-                                let statusSize = CGSize(width: 20.0, height: 20.0)
-                                let statusFrame = CGRect(origin: CGPoint(x: boundingWidth - statusSize.width - 11.0, y: 8.0 + topOffset), size: statusSize)
-                                
-                                if statusNode.frame.isEmpty {
-                                    statusNode.frame = statusFrame
-                                } else {
-                                    transition.updateFrameAdditive(node: statusNode, frame: statusFrame)
-                                }
-                                
-                                statusNode.transitionToState(.progress(color: messageTheme.accentTextColor, lineWidth: 1.5, value: nil, cancelEnabled: false, animateRotation: true), animated: false, synchronous: false, completion: {})
-                            } else {
-                                strongSelf.arrowNode.isHidden = false
-                                if let statusNode = strongSelf.statusNode {
-                                    strongSelf.statusNode = nil
-                                    statusNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, delay: 0.3, removeOnCompletion: false, completion: { [weak statusNode] _ in
-                                        statusNode?.removeFromSupernode()
-                                    })
-                                    strongSelf.arrowNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2, delay: 0.3)
-                                }
-                            }
-                            
-                            let avatarContent = strongSelf.avatarsContext.update(peers: replyPeers.map(EnginePeer.init), animated: animation.isAnimated)
-                            let avatarsSize = strongSelf.avatarsNode.update(context: item.context, content: avatarContent, animated: animation.isAnimated, synchronousLoad: synchronousLoad)
-                            
-                            let iconAlpha: CGFloat = avatarsSize.width.isZero ? 1.0 : 0.0
-                            if iconAlpha.isZero != strongSelf.iconNode.alpha.isZero {
-                                transition.updateAlpha(node: strongSelf.iconNode, alpha: iconAlpha)
-                                if animation.isAnimated {
-                                    if iconAlpha.isZero {
-                                    } else {
-                                        strongSelf.iconNode.layer.animateScale(from: 0.1, to: 1.0, duration: 0.2)
+
+                                if strongSelf.unreadIconNode.alpha.isZero != !hasUnseenReplies {
+                                    transition.updateAlpha(node: strongSelf.unreadIconNode, alpha: hasUnseenReplies ? 1.0 : 0.0)
+                                    if hasUnseenReplies {
+                                        strongSelf.unreadIconNode.layer.animateSpring(from: 0.1 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: 0.5, initialVelocity: 0.0)
                                     }
                                 }
+
+                                let hasActivity = item.controllerInteraction.currentMessageWithLoadingReplyThread == item.message.id
+
+                                if hasActivity {
+                                    strongSelf.arrowNode.isHidden = true
+                                    let statusNode: RadialStatusNode
+                                    if let current = strongSelf.statusNode {
+                                        statusNode = current
+                                    } else {
+                                        statusNode = RadialStatusNode(backgroundNodeColor: .clear)
+                                        strongSelf.statusNode = statusNode
+                                        strongSelf.buttonNode.addSubnode(statusNode)
+                                    }
+                                    let statusSize = CGSize(width: 20.0, height: 20.0)
+                                    let statusFrame = CGRect(origin: CGPoint(x: boundingWidth - statusSize.width - 11.0, y: 8.0 + topOffset), size: statusSize)
+
+                                    if statusNode.frame.isEmpty {
+                                        statusNode.frame = statusFrame
+                                    } else {
+                                        transition.updateFrameAdditive(node: statusNode, frame: statusFrame)
+                                    }
+
+                                    statusNode.transitionToState(.progress(color: messageTheme.accentTextColor, lineWidth: 1.5, value: nil, cancelEnabled: false, animateRotation: true), animated: false, synchronous: false, completion: {})
+                                } else {
+                                    strongSelf.arrowNode.isHidden = false
+                                    if let statusNode = strongSelf.statusNode {
+                                        strongSelf.statusNode = nil
+                                        statusNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, delay: 0.3, removeOnCompletion: false, completion: { [weak statusNode] _ in
+                                            statusNode?.removeFromSupernode()
+                                        })
+                                        strongSelf.arrowNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2, delay: 0.3)
+                                    }
+                                }
+
+                                let avatarContent = strongSelf.avatarsContext.update(peers: replyPeers.map(EnginePeer.init), animated: animation.isAnimated)
+                                let avatarsSize = strongSelf.avatarsNode.update(context: item.context, content: avatarContent, animated: animation.isAnimated, synchronousLoad: synchronousLoad)
+
+                                let iconAlpha: CGFloat = avatarsSize.width.isZero ? 1.0 : 0.0
+                                if iconAlpha.isZero != strongSelf.iconNode.alpha.isZero {
+                                    transition.updateAlpha(node: strongSelf.iconNode, alpha: iconAlpha)
+                                    if animation.isAnimated {
+                                        if iconAlpha.isZero {
+                                        } else {
+                                            strongSelf.iconNode.layer.animateScale(from: 0.1, to: 1.0, duration: 0.2)
+                                        }
+                                    }
+                                }
+
+                                let avatarsFrame = CGRect(origin: CGPoint(x: 13.0, y: 3.0 + topOffset), size: avatarsSize)
+                                strongSelf.avatarsNode.frame = avatarsFrame
+                                //strongSelf.avatarsNode.updateLayout(size: avatarsFrame.size)
+                                //strongSelf.avatarsNode.update(context: item.context, peers: replyPeers, synchronousLoad: synchronousLoad, imageSize: imageSize, imageSpacing: imageSpacing, borderWidth: 2.0 - UIScreenPixel)
+
+                                strongSelf.separatorNode.backgroundColor = messageTheme.polls.separator
+                                strongSelf.separatorNode.isHidden = !displaySeparator
+                                strongSelf.separatorNode.frame = CGRect(origin: CGPoint(x: layoutConstants.bubble.strokeInsets.left, y: -3.0 + topSeparatorOffset), size: CGSize(width: boundingWidth - layoutConstants.bubble.strokeInsets.left - layoutConstants.bubble.strokeInsets.right, height: UIScreenPixel))
+
+                                strongSelf.buttonNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: boundingWidth, height: boundingSize.height))
+
+                                strongSelf.buttonNode.isUserInteractionEnabled = item.message.id.namespace == Namespaces.Message.Cloud
+                                strongSelf.buttonNode.alpha = item.message.id.namespace == Namespaces.Message.Cloud ? 1.0 : 0.5
                             }
-                            
-                            let avatarsFrame = CGRect(origin: CGPoint(x: 13.0, y: 3.0 + topOffset), size: avatarsSize)
-                            strongSelf.avatarsNode.frame = avatarsFrame
-                            //strongSelf.avatarsNode.updateLayout(size: avatarsFrame.size)
-                            //strongSelf.avatarsNode.update(context: item.context, peers: replyPeers, synchronousLoad: synchronousLoad, imageSize: imageSize, imageSpacing: imageSpacing, borderWidth: 2.0 - UIScreenPixel)
-                            
-                            strongSelf.separatorNode.backgroundColor = messageTheme.polls.separator
-                            strongSelf.separatorNode.isHidden = !displaySeparator
-                            strongSelf.separatorNode.frame = CGRect(origin: CGPoint(x: layoutConstants.bubble.strokeInsets.left, y: -3.0 + topSeparatorOffset), size: CGSize(width: boundingWidth - layoutConstants.bubble.strokeInsets.left - layoutConstants.bubble.strokeInsets.right, height: UIScreenPixel))
-                            
-                            strongSelf.buttonNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: boundingWidth, height: boundingSize.height))
-                            
-                            strongSelf.buttonNode.isUserInteractionEnabled = item.message.id.namespace == Namespaces.Message.Cloud
-                            strongSelf.buttonNode.alpha = item.message.id.namespace == Namespaces.Message.Cloud ? 1.0 : 0.5
                         }
                     })
                 })

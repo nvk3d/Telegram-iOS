@@ -1258,18 +1258,19 @@ final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTransitio
                                 }
                                 
                                 if currentReplaceVideoNode, let updatedVideoFile = updateVideoFile {
-                                    let decoration = ChatBubbleVideoDecoration(corners: arguments.corners, nativeSize: nativeSize, contentMode: contentMode.bubbleVideoDecorationContentMode, backgroundColor: arguments.emptyColor ?? .black)
+                                    let decoration = ChatBubbleVideoDecoration(corners: arguments.corners, nativeSize: nativeSize, contentMode: contentMode.bubbleVideoDecorationContentMode, backgroundColor: arguments.emptyColor ?? .black, synchronous: synchronousLoads)
                                     strongSelf.videoNodeDecoration = decoration
                                     let mediaManager = context.sharedContext.mediaManager
                                     
                                     let streamVideo = isMediaStreamable(message: message, media: updatedVideoFile)
                                     let loopVideo = updatedVideoFile.isAnimated
-                                    let videoContent = NativeVideoContent(id: .message(message.stableId, updatedVideoFile.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: updatedVideoFile), streamVideo: streamVideo ? .conservative : .none, loopVideo: loopVideo, enableSound: false, fetchAutomatically: false, onlyFullSizeThumbnail: (onlyFullSizeVideoThumbnail ?? false), continuePlayingWithoutSoundOnLostAudioSession: isInlinePlayableVideo, placeholderColor: emptyColor, captureProtected: message.isCopyProtected() || isExtendedMedia, storeAfterDownload: { [weak context] in
+                                    let videoContent = NativeVideoContent(id: .message(message.stableId, updatedVideoFile.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: updatedVideoFile), streamVideo: streamVideo ? .conservative : .none, loopVideo: loopVideo, enableSound: false, fetchAutomatically: false, onlyFullSizeThumbnail: (onlyFullSizeVideoThumbnail ?? false), continuePlayingWithoutSoundOnLostAudioSession: isInlinePlayableVideo, placeholderColor: emptyColor, captureProtected: message.isCopyProtected() || isExtendedMedia, asyncContentCreation: !synchronousLoads && !transition.isAnimated, storeAfterDownload: { [weak context] in
                                         guard let context, let peerId else {
                                             return
                                         }
                                         let _ = storeDownloadedMedia(storeManager: context.downloadedMediaStoreManager, media: .message(message: MessageReference(message), media: updatedVideoFile), peerId: peerId).start()
                                     })
+                                    
                                     let videoNode = UniversalVideoNode(postbox: context.account.postbox, audioSession: mediaManager.audioSession, manager: mediaManager.universalVideoManager, decoration: decoration, content: videoContent, priority: .embedded)
                                     videoNode.isUserInteractionEnabled = false
                                     videoNode.ownsContentNodeUpdated = { [weak self] owns in
@@ -1352,8 +1353,11 @@ final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTransitio
                             }
                             
                             if let updateImageSignal = updateImageSignal {
-                                strongSelf.imageNode.captureProtected = message.id.peerId.namespace == Namespaces.Peer.SecretChat || message.isCopyProtected() || isExtendedMedia
-                                strongSelf.imageNode.setSignal(updateImageSignal(synchronousLoads, false), attemptSynchronously: synchronousLoads)
+                                let imageNode = strongSelf.imageNode
+                                strongSelf.asyncIfNeeded(synchronousLoads || transition.isAnimated) {
+                                    imageNode.captureProtected = message.id.peerId.namespace == Namespaces.Peer.SecretChat || message.isCopyProtected() || isExtendedMedia
+                                    imageNode.setSignal(updateImageSignal(synchronousLoads, false), attemptSynchronously: synchronousLoads)
+                                }
 
                                 var imageDimensions: CGSize?
                                 if let image = media as? TelegramMediaImage, let dimensions = largestImageRepresentation(image.representations)?.dimensions {
@@ -1383,86 +1387,110 @@ final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTransitio
                             }
                             
                             if let updatedStatusSignal = updatedStatusSignal {
-                                strongSelf.statusDisposable.set((updatedStatusSignal
-                                |> deliverOnMainQueue).start(next: { [weak strongSelf] status, actualFetchStatus in
-                                    displayLinkDispatcher.dispatch {
-                                        if let strongSelf = strongSelf {
-                                            strongSelf.fetchStatus = status
-                                            strongSelf.actualFetchStatus = actualFetchStatus
-                                            strongSelf.updateStatus(animated: synchronousLoads)
+                                let statusDisposable = strongSelf.statusDisposable
+                                strongSelf.asyncIfNeeded(synchronousLoads || transition.isAnimated) { [weak strongSelf] in
+                                    guard let strongSelf = strongSelf else { return }
+
+                                    statusDisposable.set((updatedStatusSignal
+                                    |> deliverOnMainQueue).start(next: { [weak strongSelf] status, actualFetchStatus in
+                                        conditionerDisplayed(weight: .s, immediate: transition.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil }) { [weak strongSelf] in
+                                            if let strongSelf = strongSelf {
+                                                strongSelf.fetchStatus = status
+                                                strongSelf.actualFetchStatus = actualFetchStatus
+                                                strongSelf.updateStatus(animated: synchronousLoads)
+                                            }
                                         }
-                                    }
-                                }))
+                                    }))
+                                }
                             }
                             
                             if let updatedVideoNodeReadySignal = updatedVideoNodeReadySignal {
-                                strongSelf.videoNodeReadyDisposable.set((updatedVideoNodeReadySignal
-                                |> deliverOnMainQueue).start(next: { [weak strongSelf] status in
-                                    displayLinkDispatcher.dispatch {
-                                        if let strongSelf = strongSelf, let videoNode = strongSelf.videoNode {
-                                            strongSelf.pinchContainerNode.contentNode.insertSubnode(videoNode, aboveSubnode: strongSelf.imageNode)
+                                let videoNodeReadyDisposable = strongSelf.videoNodeReadyDisposable
+                                strongSelf.asyncIfNeeded(synchronousLoads || transition.isAnimated) { [weak strongSelf] in
+                                    guard let strongSelf = strongSelf else { return }
+
+                                    videoNodeReadyDisposable.set((updatedVideoNodeReadySignal
+                                    |> deliverOnMainQueue).start(next: { [weak strongSelf] status in
+                                        displayLinkDispatcher.dispatch {
+                                            if let strongSelf = strongSelf, let videoNode = strongSelf.videoNode {
+                                                strongSelf.pinchContainerNode.contentNode.insertSubnode(videoNode, aboveSubnode: strongSelf.imageNode)
+                                            }
                                         }
-                                    }
-                                }))
+                                    }))
+                                }
                             }
                             
                             if let updatedPlayerStatusSignal = updatedPlayerStatusSignal {
-                                strongSelf.playerStatusDisposable.set((updatedPlayerStatusSignal
-                                |> deliverOnMainQueue).start(next: { [weak strongSelf] status in
-                                    displayLinkDispatcher.dispatch {
-                                        if let strongSelf = strongSelf {
-                                            strongSelf.playerStatus = status
+                                let playerStatusDisposable = strongSelf.playerStatusDisposable
+                                strongSelf.asyncIfNeeded(synchronousLoads || transition.isAnimated) { [weak strongSelf] in
+                                    guard let strongSelf = strongSelf else { return }
+
+                                    playerStatusDisposable.set((updatedPlayerStatusSignal
+                                    |> deliverOnMainQueue).start(next: { [weak strongSelf] status in
+                                        conditionerDisplayed(weight: .xs, immediate: transition.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil }) { [weak strongSelf] in
+                                            if let strongSelf = strongSelf {
+                                                strongSelf.playerStatus = status
+                                            }
                                         }
-                                    }
-                                }))
+                                    }))
+                                }
                             }
                             
                             if let updatedFetchControls = updatedFetchControls {
-                                let _ = strongSelf.fetchControls.swap(updatedFetchControls)
-                                
-                                var media = media
-                                if let invoice = media as? TelegramMediaInvoice, let extendedMedia = invoice.extendedMedia, case let .full(fullMedia) = extendedMedia {
-                                    media = fullMedia
-                                }
-                                
-                                if case .full = automaticDownload {
-                                    if let _ = media as? TelegramMediaImage {
-                                        updatedFetchControls.fetch(false)
-                                    } else if let image = media as? TelegramMediaWebFile {
-                                        strongSelf.fetchDisposable.set(chatMessageWebFileInteractiveFetched(account: context.account, userLocation: .peer(message.id.peerId), image: image).start())
-                                    } else if let file = media as? TelegramMediaFile {
-                                        let fetchSignal = messageMediaFileInteractiveFetched(context: context, message: message, file: file, userInitiated: false, storeToDownloadsPeerId: peerId)
-                                        let visibilityAwareFetchSignal = strongSelf.visibilityPromise.get()
-                                        |> mapToSignal { visibility -> Signal<Void, NoError> in
-                                            if visibility {
-                                                return fetchSignal
-                                                |> mapToSignal { _ -> Signal<Void, NoError> in
+                                let fetchControls = strongSelf.fetchControls
+                                let fetchDisposable = strongSelf.fetchDisposable
+                                let visibilityPromise = strongSelf.visibilityPromise
+
+                                strongSelf.asyncIfNeeded(synchronousLoads || transition.isAnimated) {
+                                    let _ = fetchControls.swap(updatedFetchControls)
+
+                                    var media = media
+                                    if let invoice = media as? TelegramMediaInvoice, let extendedMedia = invoice.extendedMedia, case let .full(fullMedia) = extendedMedia {
+                                        media = fullMedia
+                                    }
+                                    
+                                    if case .full = automaticDownload {
+                                        if let _ = media as? TelegramMediaImage {
+                                            updatedFetchControls.fetch(false)
+                                        } else if let image = media as? TelegramMediaWebFile {
+                                            fetchDisposable.set(chatMessageWebFileInteractiveFetched(account: context.account, userLocation: .peer(message.id.peerId), image: image).start())
+                                        } else if let file = media as? TelegramMediaFile {
+                                            let fetchSignal = messageMediaFileInteractiveFetched(context: context, message: message, file: file, userInitiated: false, storeToDownloadsPeerId: peerId)
+                                            let visibilityAwareFetchSignal = visibilityPromise.get()
+                                            |> mapToSignal { visibility -> Signal<Void, NoError> in
+                                                if visibility {
+                                                    return fetchSignal
+                                                    |> mapToSignal { _ -> Signal<Void, NoError> in
+                                                        return .complete()
+                                                    }
+                                                } else {
                                                     return .complete()
                                                 }
-                                            } else {
-                                                return .complete()
                                             }
+                                            fetchDisposable.set(visibilityAwareFetchSignal.start())
                                         }
-                                        strongSelf.fetchDisposable.set(visibilityAwareFetchSignal.start())
-                                    }
-                                } else if case .prefetch = automaticDownload, message.id.namespace != Namespaces.Message.SecretIncoming /*&& message.id.namespace != Namespaces.Message.Local*/ {
-                                    if let file = media as? TelegramMediaFile {
-                                        let fetchSignal = preloadVideoResource(postbox: context.account.postbox, userLocation: .peer(message.id.peerId), userContentType: MediaResourceUserContentType(file: file), resourceReference: AnyMediaReference.message(message: MessageReference(message), media: file).resourceReference(file.resource), duration: 4.0)
-                                        let visibilityAwareFetchSignal = strongSelf.visibilityPromise.get()
-                                        |> mapToSignal { visibility -> Signal<Void, NoError> in
-                                            if visibility {
-                                                return fetchSignal
-                                                |> mapToSignal { _ -> Signal<Void, NoError> in
+                                    } else if case .prefetch = automaticDownload, message.id.namespace != Namespaces.Message.SecretIncoming /*&& message.id.namespace != Namespaces.Message.Local*/ {
+                                        if let file = media as? TelegramMediaFile {
+                                            let fetchSignal = preloadVideoResource(postbox: context.account.postbox, userLocation: .peer(message.id.peerId), userContentType: MediaResourceUserContentType(file: file), resourceReference: AnyMediaReference.message(message: MessageReference(message), media: file).resourceReference(file.resource), duration: 4.0)
+                                            let visibilityAwareFetchSignal = visibilityPromise.get()
+                                            |> mapToSignal { visibility -> Signal<Void, NoError> in
+                                                if visibility {
+                                                    return fetchSignal
+                                                    |> mapToSignal { _ -> Signal<Void, NoError> in
+                                                    }
+                                                } else {
+                                                    return .complete()
                                                 }
-                                            } else {
-                                                return .complete()
                                             }
+                                            fetchDisposable.set(visibilityAwareFetchSignal.start())
                                         }
-                                        strongSelf.fetchDisposable.set(visibilityAwareFetchSignal.start())
                                     }
                                 }
                             } else if currentAutomaticDownload != automaticDownload, case .full = automaticDownload {
-                                strongSelf.fetchControls.with({ $0 })?.fetch(false)
+                                let fetchControls = strongSelf.fetchControls
+                                strongSelf.asyncIfNeeded(synchronousLoads || transition.isAnimated) {
+                                    fetchControls.with({ $0 })?.fetch(false)
+                                }
                             }
                             
                             strongSelf.updateStatus(animated: synchronousLoads)
@@ -1472,6 +1500,14 @@ final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTransitio
                     })
                 })
             })
+        }
+    }
+
+    private func asyncIfNeeded(_ synchronous: Bool, block: @escaping () -> Void) {
+        if synchronous {
+            block()
+        } else {
+            Queue.resourceQueue().async(block)
         }
     }
     

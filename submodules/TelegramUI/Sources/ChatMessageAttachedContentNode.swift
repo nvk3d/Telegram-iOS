@@ -422,7 +422,7 @@ final class ChatMessageAttachedContentNode: ASDisplayNode {
             var refineContentImageLayout: ((CGSize, Bool, Bool, ImageCorners) -> (CGFloat, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation, Bool) -> ChatMessageInteractiveMediaNode)))?
             var refineContentFileLayout: ((CGSize) -> (CGFloat, (CGFloat) -> (CGSize, (Bool, ListViewItemUpdateAnimation, ListViewItemApply?) -> ChatMessageInteractiveFileNode)))?
 
-            var contentInstantVideoSizeAndApply: (ChatMessageInstantVideoItemLayoutResult, (ChatMessageInstantVideoItemLayoutData, ListViewItemUpdateAnimation) -> ChatMessageInteractiveInstantVideoNode)?
+            var contentInstantVideoSizeAndApply: (ChatMessageInstantVideoItemLayoutResult, (Bool, ChatMessageInstantVideoItemLayoutData, ListViewItemUpdateAnimation) -> ChatMessageInteractiveInstantVideoNode)?
             
             let string = NSMutableAttributedString()
             var notEmpty = false
@@ -1060,7 +1060,7 @@ final class ChatMessageAttachedContentNode: ASDisplayNode {
                             }
                             
                             if let (videoLayout, apply) = contentInstantVideoSizeAndApply {
-                                let contentInstantVideoNode = apply(.unconstrained(width: boundingWidth - insets.left - insets.right), animation)
+                                let contentInstantVideoNode = apply(synchronousLoads, .unconstrained(width: boundingWidth - insets.left - insets.right), animation)
                                 if strongSelf.contentInstantVideoNode !== contentInstantVideoNode {
                                     strongSelf.contentInstantVideoNode = contentInstantVideoNode
                                     strongSelf.addSubnode(contentInstantVideoNode)
