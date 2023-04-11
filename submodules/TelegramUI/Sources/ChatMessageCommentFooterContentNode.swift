@@ -265,8 +265,8 @@ final class ChatMessageCommentFooterContentNode: ChatMessageBubbleContentNode {
                             
                             strongSelf.buttonNode.accessibilityLabel = accessibilityLabel
 
-                            conditionerDisplayed(weight: .m, immediate: synchronousLoad || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) { [weak strongSelf] in
-                                guard let strongSelf = strongSelf else { return }
+                            //conditionerDisplayed(weight: .m, immediate: synchronousLoad || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) { [weak strongSelf] in
+                                //guard let strongSelf = strongSelf else { return }
 
                                 let _ = countApply(animation.isAnimated)
                                 let _ = alternativeCountApply(animation.isAnimated)
@@ -386,7 +386,7 @@ final class ChatMessageCommentFooterContentNode: ChatMessageBubbleContentNode {
 
                                 strongSelf.buttonNode.isUserInteractionEnabled = item.message.id.namespace == Namespaces.Message.Cloud
                                 strongSelf.buttonNode.alpha = item.message.id.namespace == Namespaces.Message.Cloud ? 1.0 : 0.5
-                            }
+                            //}
                         }
                     })
                 })

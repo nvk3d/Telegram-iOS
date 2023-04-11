@@ -1069,7 +1069,7 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
     override func asyncLayout() -> (_ item: ChatMessageItem, _ params: ListViewItemLayoutParams, _ mergedTop: ChatMessageMerge, _ mergedBottom: ChatMessageMerge, _ dateHeaderAtBottom: Bool) -> (ListViewItemNodeLayout, (ListViewItemUpdateAnimation, ListViewItemApply, Bool) -> Void) {
         var currentContentClassesPropertiesAndLayouts: [(Message, AnyClass, Bool, (_ item: ChatMessageBubbleContentItem, _ layoutConstants: ChatMessageItemLayoutConstants, _ preparePosition: ChatMessageBubblePreparePosition, _ messageSelection: Bool?, _ constrainedSize: CGSize, _ avatarInset: CGFloat) -> (ChatMessageBubbleContentProperties, CGSize?, CGFloat, (CGSize, ChatMessageBubbleContentPosition) -> (CGFloat, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation, Bool, ListViewItemApply?) -> Void))))] = []
         for contentNode in self.contentNodes {
-            if let message = contentNode.item?.message {
+            if let message = contentNode.message {
                 currentContentClassesPropertiesAndLayouts.append((message, type(of: contentNode) as AnyClass, contentNode.supportsMosaic, contentNode.asyncLayoutContent()))
             } else {
                 assertionFailure()
@@ -1407,6 +1407,7 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
             }
             if !found {
                 let contentNode = (contentNodeItem.type as! ChatMessageBubbleContentNode.Type).init()
+                contentNode.message = contentNodeItem.message
                 contentPropertiesAndPrepareLayouts.append((contentNodeItem.message, contentNode.supportsMosaic, contentNodeItem.attributes, contentNodeItem.bubbleAttributes, contentNode.asyncLayoutContent()))
                 if addedContentNodes == nil {
                     addedContentNodes = []
@@ -2452,7 +2453,7 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
         let disablesComments = !hasInstantVideo
         
         return (layout, { animation, applyInfo, synchronousLoads in
-            //conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { selfReference.value?.supernode == nil }) {
+            conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { selfReference.value?.supernode == nil }) {
             /*return*/ ChatMessageBubbleItemNode.applyLayout(selfReference: selfReference, animation, synchronousLoads,
                 params: params,
                 applyInfo: applyInfo,
@@ -2497,7 +2498,7 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
                 avatarOffset: avatarOffset,
                 hidesHeaders: hidesHeaders,
                 disablesComments: disablesComments
-            )//}
+            )}
         })
     }
     
@@ -3061,23 +3062,25 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
                 for (contentNodeMessage, isAttachment, contentNode) in addedContentNodes {
                     updatedContentNodes.append(contentNode)
                     
-                    let contextSourceNode: ContextExtractedContentContainingNode
-                    let containerSupernode: ASDisplayNode
-                    if isAttachment {
-                        contextSourceNode = strongSelf.mainContextSourceNode
-                        containerSupernode = strongSelf.clippingNode
-                    } else {
-                        contextSourceNode = strongSelf.contentContainers.first(where: { $0.contentMessageStableId == contentNodeMessage.stableId })?.sourceNode ?? strongSelf.mainContextSourceNode
-                        containerSupernode = strongSelf.contentContainers.first(where: { $0.contentMessageStableId == contentNodeMessage.stableId })?.sourceNode.contentNode ?? strongSelf.clippingNode
+                    conditionerDisplayed(weight: .s, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode == nil }) {
+                        let contextSourceNode: ContextExtractedContentContainingNode
+                        let containerSupernode: ASDisplayNode
+                        if isAttachment {
+                            contextSourceNode = strongSelf.mainContextSourceNode
+                            containerSupernode = strongSelf.clippingNode
+                        } else {
+                            contextSourceNode = strongSelf.contentContainers.first(where: { $0.contentMessageStableId == contentNodeMessage.stableId })?.sourceNode ?? strongSelf.mainContextSourceNode
+                            containerSupernode = strongSelf.contentContainers.first(where: { $0.contentMessageStableId == contentNodeMessage.stableId })?.sourceNode.contentNode ?? strongSelf.clippingNode
+                        }
+                        containerSupernode.addSubnode(contentNode)
+                        
+                        contentNode.bubbleBackgroundNode = strongSelf.backgroundNode
+                        contentNode.bubbleBackdropNode = strongSelf.backgroundWallpaperNode
+                        contentNode.updateIsTextSelectionActive = { [weak contextSourceNode] value in
+                            contextSourceNode?.updateDistractionFreeMode?(value)
+                        }
+                        contentNode.updateIsExtractedToContextPreview(contextSourceNode.isExtractedToContextPreview)
                     }
-                    containerSupernode.addSubnode(contentNode)
-                    
-                    contentNode.bubbleBackgroundNode = strongSelf.backgroundNode
-                    contentNode.bubbleBackdropNode = strongSelf.backgroundWallpaperNode
-                    contentNode.updateIsTextSelectionActive = { [weak contextSourceNode] value in
-                        contextSourceNode?.updateDistractionFreeMode?(value)
-                    }
-                    contentNode.updateIsExtractedToContextPreview(contextSourceNode.isExtractedToContextPreview)
                 }
             }
             
@@ -3094,14 +3097,14 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
                     }
                 }
                 for contentNode in updatedContentNodes {
-                    if type(of: contentNode) == contentItem.type && contentNode.item?.message.stableId == contentItem.message.stableId {
+                    if type(of: contentNode) == contentItem.type && contentNode.message?.stableId == contentItem.message.stableId {
                         sortedContentNodes.append(contentNode)
                         continue outer
                     }
                 }
             }
             
-            assert(sortedContentNodes.count == updatedContentNodes.count)
+            //assert(sortedContentNodes.count == updatedContentNodes.count)
             
             strongSelf.contentNodes = sortedContentNodes
         }
@@ -3109,9 +3112,9 @@ class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewItemNode
         var shouldClipOnTransitions = true
         var contentNodeIndex = 0
         for (relativeFrame, _, useContentOrigin, apply) in contentNodeFramesPropertiesAndApply {
-            //conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in return strongSelf == nil || strongSelf?.supernode == nil }) {
-            apply(animation, synchronousLoads, applyInfo)
-            //}
+            conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in return strongSelf == nil || strongSelf?.supernode == nil }) {
+                apply(animation, synchronousLoads, applyInfo)
+            }
             
             if contentNodeIndex >= strongSelf.contentNodes.count {
                 break

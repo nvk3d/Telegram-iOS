@@ -166,6 +166,7 @@ class ChatMessageBubbleContentNode: ASDisplayNode {
     var visibility: ListViewItemNodeVisibility = .none
     
     var item: ChatMessageBubbleContentItem?
+    var message: Message?
     
     var updateIsTextSelectionActive: ((Bool) -> Void)?
     

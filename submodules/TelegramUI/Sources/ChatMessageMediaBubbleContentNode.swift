@@ -316,7 +316,7 @@ class ChatMessageMediaBubbleContentNode: ChatMessageBubbleContentNode {
                             strongSelf.media = selectedMedia
                             strongSelf.automaticPlayback = automaticPlayback
 
-                            conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) {
+                            //conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) {
                                 let imageFrame = CGRect(origin: CGPoint(x: bubbleInsets.left, y: bubbleInsets.top), size: imageSize)
                                 
                                 animation.animator.updateFrame(layer: strongSelf.interactiveImageNode.layer, frame: imageFrame, completion: nil)
@@ -360,7 +360,7 @@ class ChatMessageMediaBubbleContentNode: ChatMessageBubbleContentNode {
                                 } else {
                                     strongSelf.interactiveImageNode.dateAndStatusNode.pressed = nil
                                 }
-                            }
+                            //}
                         }
                     })
                 })

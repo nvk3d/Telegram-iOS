@@ -442,7 +442,7 @@ class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                                 strongSelf.cachedChatMessageText = updatedCachedChatMessageText
                             }
 
-                            conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) {
+                            //conditionerDisplayed(weight: .m, immediate: synchronousLoads || animation.isAnimated, isOutdated: { [weak strongSelf] in strongSelf?.supernode?.supernode == nil || strongSelf?.item !== item }) {
                                 let cachedLayout = strongSelf.textNode.textNode.cachedLayout
                                 
                                 if case .System = animation {
@@ -549,7 +549,7 @@ class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                                 } else {
                                     strongSelf.statusNode.pressed = nil
                                 }
-                            }
+                            //}
                         }
                     })
                 })
