@@ -236,6 +236,7 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
     private var presentationData: PresentationData
     private let source: ContextContentSource
     private var items: Signal<ContextController.Items, NoError>
+    private let animator: ContextContentAnimator?
     private let beginDismiss: (ContextMenuActionResult) -> Void
     private let beganAnimatingOut: () -> Void
     private let attemptTransitionControllerIntoNavigation: () -> Void
@@ -301,6 +302,7 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
         presentationData: PresentationData,
         source: ContextContentSource,
         items: Signal<ContextController.Items, NoError>,
+        animator: ContextContentAnimator?,
         beginDismiss: @escaping (ContextMenuActionResult) -> Void,
         recognizer: TapLongTapOrDoubleTapGestureRecognizer?,
         gesture: ContextGesture?,
@@ -310,6 +312,7 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
         self.presentationData = presentationData
         self.source = source
         self.items = items
+        self.animator = animator
         self.beginDismiss = beginDismiss
         self.beganAnimatingOut = beganAnimatingOut
         self.attemptTransitionControllerIntoNavigation = attemptTransitionControllerIntoNavigation
@@ -959,46 +962,53 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                 
                 extracted.willUpdateIsExtractedToContextPreview?(true, .animated(duration: 0.2, curve: .easeInOut))
             case .controller:
-                let springDuration: Double = 0.52 * animationDurationFactor
-                let springDamping: CGFloat = 110.0
-                
-                self.actionsContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor)
-                self.actionsContainerNode.layer.animateSpring(from: 0.1 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
-                self.contentContainerNode.allowsGroupOpacity = true
-                self.contentContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor, completion: { [weak self] _ in
-                    self?.contentContainerNode.allowsGroupOpacity = false
-                })
-                
-                if let originalProjectedContentViewFrame = self.originalProjectedContentViewFrame {
-                    let localSourceFrame = self.view.convert(CGRect(origin: CGPoint(x: originalProjectedContentViewFrame.1.minX, y: originalProjectedContentViewFrame.1.minY), size: CGSize(width: originalProjectedContentViewFrame.1.width, height: originalProjectedContentViewFrame.1.height)), to: self.scrollNode.view)
-                    
-                    self.contentContainerNode.layer.animateSpring(from: min(localSourceFrame.width / self.contentContainerNode.frame.width, localSourceFrame.height / self.contentContainerNode.frame.height) as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
-                    
-                    switch self.source {
-                    case let .controller(controller):
-                        controller.animatedIn()
-                    default:
-                        break
-                    }
-                    
-                    let contentContainerOffset = CGPoint(x: localSourceFrame.center.x - self.contentContainerNode.frame.center.x, y: localSourceFrame.center.y - self.contentContainerNode.frame.center.y)
-                    if let contentNode = self.contentContainerNode.contentNode, case let .controller(controller) = contentNode {
-                        let snapshotView: UIView? = nil// controller.sourceNode.view.snapshotContentTree()
-                        if let snapshotView = snapshotView {
-                            controller.sourceView.isHidden = true
-                            
-                            self.view.insertSubview(snapshotView, belowSubview: self.contentContainerNode.view)
-                            snapshotView.layer.animateSpring(from: NSValue(cgPoint: localSourceFrame.center), to: NSValue(cgPoint: CGPoint(x: self.contentContainerNode.frame.midX, y: self.contentContainerNode.frame.minY + localSourceFrame.height / 2.0)), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false)
-                            //snapshotView.layer.animateSpring(from: 1.0 as NSNumber, to: (self.contentContainerNode.frame.width / localSourceFrame.width) as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false)
-                            snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2 * animationDurationFactor, removeOnCompletion: false, completion: { [weak snapshotView] _ in
-                                snapshotView?.removeFromSuperview()
-                            })
-                        }
-                    }
-                    self.actionsContainerNode.layer.animateSpring(from: NSValue(cgPoint: CGPoint(x: localSourceFrame.center.x - self.actionsContainerNode.position.x, y: localSourceFrame.center.y - self.actionsContainerNode.position.y)), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true)
-                    self.contentContainerNode.layer.animateSpring(from: NSValue(cgPoint: contentContainerOffset), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true, completion: { [weak self] _ in
+                if let animator = animator {
+                    let animation = ContextContentAnimationIn(source: source, projectedContentFrame: originalProjectedContentViewFrame, actionsNode: actionsContainerNode, contentContainerNode: contentContainerNode, contextView: view, scrollView: scrollNode.view)
+                    animator.animateIn(animation) { [weak self] in
                         self?.animatedIn = true
+                    }
+                } else {
+                    let springDuration: Double = 0.52 * animationDurationFactor
+                    let springDamping: CGFloat = 110.0
+
+                    self.actionsContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor)
+                    self.actionsContainerNode.layer.animateSpring(from: 0.1 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
+                    self.contentContainerNode.allowsGroupOpacity = true
+                    self.contentContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor, completion: { [weak self] _ in
+                        self?.contentContainerNode.allowsGroupOpacity = false
                     })
+
+                    if let originalProjectedContentViewFrame = self.originalProjectedContentViewFrame {
+                        let localSourceFrame = self.view.convert(CGRect(origin: CGPoint(x: originalProjectedContentViewFrame.1.minX, y: originalProjectedContentViewFrame.1.minY), size: CGSize(width: originalProjectedContentViewFrame.1.width, height: originalProjectedContentViewFrame.1.height)), to: self.scrollNode.view)
+
+                        self.contentContainerNode.layer.animateSpring(from: min(localSourceFrame.width / self.contentContainerNode.frame.width, localSourceFrame.height / self.contentContainerNode.frame.height) as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
+
+                        switch self.source {
+                        case let .controller(controller):
+                            controller.animatedIn()
+                        default:
+                            break
+                        }
+
+                        let contentContainerOffset = CGPoint(x: localSourceFrame.center.x - self.contentContainerNode.frame.center.x, y: localSourceFrame.center.y - self.contentContainerNode.frame.center.y)
+                        if let contentNode = self.contentContainerNode.contentNode, case let .controller(controller) = contentNode {
+                            let snapshotView: UIView? = nil// controller.sourceNode.view.snapshotContentTree()
+                            if let snapshotView = snapshotView {
+                                controller.sourceView.isHidden = true
+
+                                self.view.insertSubview(snapshotView, belowSubview: self.contentContainerNode.view)
+                                snapshotView.layer.animateSpring(from: NSValue(cgPoint: localSourceFrame.center), to: NSValue(cgPoint: CGPoint(x: self.contentContainerNode.frame.midX, y: self.contentContainerNode.frame.minY + localSourceFrame.height / 2.0)), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false)
+                                //snapshotView.layer.animateSpring(from: 1.0 as NSNumber, to: (self.contentContainerNode.frame.width / localSourceFrame.width) as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false)
+                                snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2 * animationDurationFactor, removeOnCompletion: false, completion: { [weak snapshotView] _ in
+                                    snapshotView?.removeFromSuperview()
+                                })
+                            }
+                        }
+                        self.actionsContainerNode.layer.animateSpring(from: NSValue(cgPoint: CGPoint(x: localSourceFrame.center.x - self.actionsContainerNode.position.x, y: localSourceFrame.center.y - self.actionsContainerNode.position.y)), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true)
+                        self.contentContainerNode.layer.animateSpring(from: NSValue(cgPoint: contentContainerOffset), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true, completion: { [weak self] _ in
+                            self?.animatedIn = true
+                        })
+                    }
                 }
             }
         }
@@ -2346,6 +2356,23 @@ public enum ContextContentSource {
     case controller(ContextControllerContentSource)
 }
 
+public struct ContextContentAnimationIn {
+    // MARK: - Properties
+
+    public let source: ContextContentSource
+    public let projectedContentFrame: (CGRect, CGRect)?
+
+    public let actionsNode: ASDisplayNode
+    public let contentContainerNode: ContextContentContainerNode
+    public let contextView: UIView
+    public let scrollView: UIScrollView
+}
+
+public protocol ContextContentAnimator: AnyObject {
+    func animateIn(_ animation: ContextContentAnimationIn, completion: @escaping () -> Void)
+    func animateOut(_ completion: @escaping () -> Void)
+}
+
 public protocol ContextControllerItemsNode: ASDisplayNode {
     func update(presentationData: PresentationData, constrainedWidth: CGFloat, maxHeight: CGFloat, bottomInset: CGFloat, transition: ContainedViewLayoutTransition) -> (cleanSize: CGSize, apparentHeight: CGFloat)
     
@@ -2469,6 +2496,7 @@ public final class ContextController: ViewController, StandalonePresentableContr
     private var presentationData: PresentationData
     private let source: ContextContentSource
     private var items: Signal<ContextController.Items, NoError>
+    private let animator: ContextContentAnimator?
     
     private let _ready = Promise<Bool>()
     override public var ready: Promise<Bool> {
@@ -2520,11 +2548,12 @@ public final class ContextController: ViewController, StandalonePresentableContr
     
     public var getOverlayViews: (() -> [UIView])?
     
-    public init(account: Account, presentationData: PresentationData, source: ContextContentSource, items: Signal<ContextController.Items, NoError>, recognizer: TapLongTapOrDoubleTapGestureRecognizer? = nil, gesture: ContextGesture? = nil, workaroundUseLegacyImplementation: Bool = false) {
+    public init(account: Account, presentationData: PresentationData, source: ContextContentSource, items: Signal<ContextController.Items, NoError>, animator: ContextContentAnimator? = nil, recognizer: TapLongTapOrDoubleTapGestureRecognizer? = nil, gesture: ContextGesture? = nil, workaroundUseLegacyImplementation: Bool = false) {
         self.account = account
         self.presentationData = presentationData
         self.source = source
         self.items = items
+        self.animator = animator
         self.recognizer = recognizer
         self.gesture = gesture
         self.workaroundUseLegacyImplementation = workaroundUseLegacyImplementation
@@ -2588,7 +2617,7 @@ public final class ContextController: ViewController, StandalonePresentableContr
     }
     
     override public func loadDisplayNode() {
-        self.displayNode = ContextControllerNode(account: self.account, controller: self, presentationData: self.presentationData, source: self.source, items: self.items, beginDismiss: { [weak self] result in
+        self.displayNode = ContextControllerNode(account: self.account, controller: self, presentationData: self.presentationData, source: self.source, items: self.items, animator: animator, beginDismiss: { [weak self] result in
             self?.dismiss(result: result, completion: nil)
         }, recognizer: self.recognizer, gesture: self.gesture, beganAnimatingOut: { [weak self] in
             guard let strongSelf = self else {

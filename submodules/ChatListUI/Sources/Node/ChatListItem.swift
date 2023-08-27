@@ -995,6 +995,8 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
     
     private var onlineIsVoiceChat: Bool = false
     private var currentOnline: Bool?
+
+    private var contextContainerTargetHierarchyIndex: Int?
     
     override var canBeSelected: Bool {
         if self.selectableControlNode != nil || self.item?.editing == true {
@@ -1273,13 +1275,15 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                 let _ = apply(false, false)
             }
         })
-        
+
         self.contextContainer.shouldBegin = { [weak self] location in
             guard let strongSelf = self, let item = strongSelf.item else {
                 return false
             }
             
             strongSelf.contextContainer.additionalActivationProgressLayer = nil
+            strongSelf.contextContainer.customActivationProgress = nil
+
             if let inlineNavigationLocation = item.interaction.inlineNavigationLocation {
                 if case let .peer(peerId) = inlineNavigationLocation.location {
                     if case let .chatList(index) = item.index, index.messageIndex.id.peerId == peerId {
@@ -1292,6 +1296,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                 strongSelf.contextContainer.additionalActivationProgressLayer = strongSelf.compoundHighlightingNode?.layer
             } else {
                 strongSelf.contextContainer.targetNodeForActivationProgress = nil
+                strongSelf.contextContainer.customActivationProgress = strongSelf.contextCustomActivationProgress()
             }
             
             return true
@@ -3543,21 +3548,21 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                     
                     transition.updateFrame(node: strongSelf.backgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.contentSize.width, height: itemHeight)))
                     let backgroundColor: UIColor
-                    let highlightedBackgroundColor: UIColor
+                    //let highlightedBackgroundColor: UIColor
                     if item.selected {
                         backgroundColor = theme.itemSelectedBackgroundColor
-                        highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
+                        //highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                     } else if isPinned {
                         if case let .groupReference(groupReferenceData) = item.content, groupReferenceData.hiddenByDefault {
                             backgroundColor = theme.itemBackgroundColor
-                            highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
+                            //highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                         } else {
                             backgroundColor = theme.pinnedItemBackgroundColor
-                            highlightedBackgroundColor = theme.pinnedItemHighlightedBackgroundColor
+                            //highlightedBackgroundColor = theme.pinnedItemHighlightedBackgroundColor
                         }
                     } else {
                         backgroundColor = theme.itemBackgroundColor
-                        highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
+                        //highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                     }
                     
                     if animated {
@@ -3572,7 +3577,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                         transition.updateAlpha(node: strongSelf.backgroundNode, alpha: 1.0)
                     }
                     
-                    strongSelf.highlightedBackgroundNode.backgroundColor = highlightedBackgroundColor
+                    //strongSelf.highlightedBackgroundNode.backgroundColor = highlightedBackgroundColor
                     let topNegativeInset: CGFloat = 0.0
                     strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: layoutOffset - separatorHeight - topNegativeInset), size: CGSize(width: layout.contentSize.width, height: layout.contentSize.height + separatorHeight + topNegativeInset))
                     
@@ -3907,6 +3912,81 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                 item.interaction.openStories(.peer(peerData.peer.peerId), self)
             case .groupReference:
                 item.interaction.openStories(.archive, self)
+            }
+        }
+    }
+
+    private func contextCustomActivationProgress() -> (CGFloat, ContextGestureTransition) -> Void {
+        { [weak self] progress, update in
+            guard let strongSelf = self else { return }
+            guard strongSelf.contextContainer.animateScale else { return }
+
+            let targetNode: ASDisplayNode = strongSelf
+            let targetContentRect = strongSelf.contextContainer.targetNodeForActivationProgressContentRect ?? CGRect(origin: CGPoint(), size: targetNode.bounds.size)
+
+            let scaleSide = targetContentRect.width
+            let minScale: CGFloat = max(1.02, (scaleSide + 5.0) / scaleSide)
+            let currentScale = 1.0 * (1.0 - progress) + minScale * progress
+
+            let shadowRadius = 3.0 * progress
+
+            let originalCenterOffsetX: CGFloat = targetNode.bounds.width / 2.0 - targetContentRect.midX
+            let scaledCenterOffsetX: CGFloat = originalCenterOffsetX * currentScale
+
+            let originalCenterOffsetY: CGFloat = targetNode.bounds.height / 2.0 - targetContentRect.midY
+            let scaledCenterOffsetY: CGFloat = originalCenterOffsetY * currentScale
+
+            let scaleMidX: CGFloat = scaledCenterOffsetX - originalCenterOffsetX
+            let scaleMidY: CGFloat = scaledCenterOffsetY - originalCenterOffsetY
+
+            switch update {
+            case .update:
+                let sublayerTransform = CATransform3DTranslate(CATransform3DScale(CATransform3DIdentity, currentScale, currentScale, 1.0), scaleMidX, scaleMidY, 0.0)
+                targetNode.layer.sublayerTransform = sublayerTransform
+                if let additionalActivationProgressLayer = strongSelf.contextContainer.additionalActivationProgressLayer {
+                    additionalActivationProgressLayer.transform = sublayerTransform
+                }
+                targetNode.layer.shadowRadius = shadowRadius
+            case .begin:
+                let sublayerTransform = CATransform3DTranslate(CATransform3DScale(CATransform3DIdentity, currentScale, currentScale, 1.0), scaleMidX, scaleMidY, 0.0)
+                targetNode.layer.sublayerTransform = sublayerTransform
+                if let additionalActivationProgressLayer = strongSelf.contextContainer.additionalActivationProgressLayer {
+                    additionalActivationProgressLayer.transform = sublayerTransform
+                }
+
+                targetNode.layer.shadowColor = UIColor.black.cgColor
+                targetNode.layer.shadowOpacity = 0.3
+                targetNode.layer.shadowRadius = 0.0
+                targetNode.layer.shadowOffset = .zero
+
+                if let supernode = targetNode.supernode, let index = supernode.view.subviews.firstIndex(of: targetNode.view) {
+                    strongSelf.contextContainerTargetHierarchyIndex = index
+                    supernode.view.bringSubviewToFront(targetNode.view)
+                }
+            case .ended:
+                let sublayerTransform = CATransform3DTranslate(CATransform3DScale(CATransform3DIdentity, currentScale, currentScale, 1.0), scaleMidX, scaleMidY, 0.0)
+                let previousTransform = targetNode.layer.sublayerTransform
+                targetNode.layer.sublayerTransform = sublayerTransform
+
+                targetNode.layer.animate(from: NSValue(caTransform3D: previousTransform), to: NSValue(caTransform3D: sublayerTransform), keyPath: "sublayerTransform", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, duration: 0.2)
+
+                if let additionalActivationProgressLayer = strongSelf.contextContainer.additionalActivationProgressLayer {
+                    DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 0.2, execute: {
+                        additionalActivationProgressLayer.transform = sublayerTransform
+                    })
+                }
+
+                if let supernode = targetNode.supernode {
+                    if let index = strongSelf.contextContainerTargetHierarchyIndex, index < supernode.view.subviews.count {
+                        supernode.view.insertSubview(targetNode.view, at: index)
+                    } else if let scrollIndicatorNode = supernode.subnodes?.last(where: { $0 is ASImageNode }) {
+                        supernode.insertSubnode(targetNode, belowSubnode: scrollIndicatorNode)
+                    }
+                    strongSelf.contextContainerTargetHierarchyIndex = nil
+                }
+
+                targetNode.layer.animate(from: NSNumber(value: Float(targetNode.layer.shadowRadius)), to: NSNumber(value: Float(shadowRadius)), keyPath: "shadowRadius", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, duration: 0.2)
+                targetNode.layer.shadowRadius = shadowRadius
             }
         }
     }

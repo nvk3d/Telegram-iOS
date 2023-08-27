@@ -79,6 +79,89 @@ private final class ContextControllerContentSourceImpl: ContextControllerContent
     }
 }
 
+private final class ContextContentAnimatorImpl: ContextContentAnimator {
+    // MARK: - Properties
+
+    private weak var sourceNode: ASDisplayNode?
+
+    // MARK: - Init
+
+    init(sourceNode: ASDisplayNode) {
+        self.sourceNode = sourceNode
+    }
+
+    // MARK: - Interface
+
+    func animateIn(_ animation: ContextContentAnimationIn, completion: @escaping () -> Void) {
+        let animationDurationFactor: Double = 1.0
+        let springDuration: Double = 0.52 * animationDurationFactor
+        let springDamping: CGFloat = 110.0
+
+        let source = animation.source
+
+        let actionsNode = animation.actionsNode
+        let contentContainerNode = animation.contentContainerNode
+        let contextView = animation.contextView
+        let scrollView = animation.scrollView
+
+        actionsNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor)
+        actionsNode.layer.animateSpring(from: 0.1 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
+        contentContainerNode.allowsGroupOpacity = true
+        contentContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor, completion: { [weak contentContainerNode] _ in
+            contentContainerNode?.allowsGroupOpacity = false
+        })
+
+        guard let projectedContentFrame = animation.projectedContentFrame else { return }
+
+        let localSourceFrame = contextView.convert(CGRect(origin: CGPoint(x: projectedContentFrame.1.minX, y: projectedContentFrame.1.minY), size: CGSize(width: projectedContentFrame.1.width, height: projectedContentFrame.1.height)), to: scrollView)
+
+        switch source {
+        case let .controller(controller):
+            controller.animatedIn()
+        default:
+            break
+        }
+
+        let contentContainerOffset = CGPoint(x: localSourceFrame.center.x - contentContainerNode.frame.center.x, y: localSourceFrame.center.y - contentContainerNode.frame.center.y)
+
+        if let sourceNode = sourceNode, let snapshotView = sourceNode.view.snapshotView(afterScreenUpdates: false) {
+            let frame = contextView.convert(snapshotView.frame, from: sourceNode.supernode?.view)
+            snapshotView.frame = frame
+            snapshotView.backgroundColor = .white
+            contextView.insertSubview(snapshotView, aboveSubview: contentContainerNode.view)
+
+            snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: springDuration, removeOnCompletion: false)
+
+            let toPosition = CGPoint(x: frame.midX, y: contentContainerNode.frame.minY + snapshotView.frame.height / 2.0)
+            snapshotView.layer.animateSpring(from: NSValue(cgPoint: CGPoint(x: frame.midX, y: frame.midY)), to: NSValue(cgPoint: toPosition), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping) { [weak snapshotView] _ in
+                snapshotView?.removeFromSuperview()
+            }
+
+            let maskFrame = contextView.convert(frame, to: contentContainerNode.view)
+            let maskLayer = CALayer()
+            maskLayer.backgroundColor = UIColor.black.cgColor
+            maskLayer.position = CGPoint(x: maskFrame.midX - contentContainerOffset.x, y: maskFrame.midY - contentContainerOffset.y)
+            maskLayer.bounds = CGRect(origin: .zero, size: CGSize(width: maskFrame.width, height: maskFrame.height))
+            contentContainerNode.layer.mask = maskLayer
+
+            maskLayer.animateSpring(from: NSValue(cgPoint: maskLayer.position), to: NSValue(cgPoint: CGPoint(x: contentContainerNode.frame.width / 2.0, y: contentContainerNode.frame.height / 2.0)), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false)
+            maskLayer.animateSpring(from: NSValue(cgRect: CGRect(origin: .zero, size: maskFrame.size)), to: NSValue(cgRect: CGRect(origin: .zero, size: contentContainerNode.frame.size)), keyPath: "bounds", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false) { [weak contentContainerNode] _ in
+                contentContainerNode?.layer.mask = nil
+            }
+            maskLayer.animate(from: NSNumber(value: Float(maskLayer.cornerRadius)), to: NSNumber(value: Float(14.0)), keyPath: "cornerRadius", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, duration: 0.2 * animationDurationFactor, removeOnCompletion: false)
+        }
+
+        actionsNode.layer.animateSpring(from: NSValue(cgPoint: CGPoint(x: localSourceFrame.center.x - actionsNode.position.x, y: localSourceFrame.center.y - actionsNode.position.y)), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true)
+        contentContainerNode.layer.animateSpring(from: NSValue(cgPoint: contentContainerOffset), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true) { _ in
+            completion()
+        }
+    }
+
+    func animateOut(_ completion: @escaping () -> Void) {
+        completion()
+    }
+}
+
 public class ChatListControllerImpl: TelegramBaseController, ChatListController {
     private var validLayout: ContainerViewLayout?
     
@@ -1328,8 +1411,9 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                             chatController.canReadHistory.set(false)
                             source = .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController))
                         }
-                        
-                        let contextController = ContextController(account: strongSelf.context.account, presentationData: strongSelf.presentationData, source: source, items: chatContextMenuItems(context: strongSelf.context, peerId: peer.peerId, promoInfo: promoInfo, source: .chatList(filter: strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.chatListFilter), chatListController: strongSelf, joined: joined) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+
+                        let animator: ContextContentAnimator? = ContextContentAnimatorImpl(sourceNode: node)
+                        let contextController = ContextController(account: strongSelf.context.account, presentationData: strongSelf.presentationData, source: source, items: chatContextMenuItems(context: strongSelf.context, peerId: peer.peerId, promoInfo: promoInfo, source: .chatList(filter: strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.chatListFilter), chatListController: strongSelf, joined: joined) |> map { ContextController.Items(content: .list($0)) }, animator: animator, gesture: gesture)
                         strongSelf.presentInGlobalOverlay(contextController)
                     }
                 case let .forum(pinnedIndex, _, threadId, _, _):
