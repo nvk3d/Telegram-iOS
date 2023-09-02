@@ -232,8 +232,8 @@ final class ChatListContextAnimationNode: ASDisplayNode {
 
     // MARK: - Interface
 
-    func updateState(_ state: State, sourceNode: ASDisplayNode, controller: ViewController, size: CGSize, animated: Bool, completion: (() -> Void)? = nil) {
-        guard self.state != state else { completion?(); return }
+    func updateState(_ state: State, sourceNode: ASDisplayNode, controller: ViewController, size: CGSize, animated: Bool) {
+        guard self.state != state else { return }
         self.state = state
 
         chatListItemSnapshot?.removeFromSuperview()
