@@ -1204,9 +1204,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.backgroundNode.displaysAsynchronously = false
         
         self.avatarContainerNode = ASDisplayNode()
-        self.avatarContainerNode.layer.name = ChatListItemNodeName.avatarContainerNode.rawValue
         self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 26.0))
-        self.avatarNode.layer.name = ChatListItemNodeName.avatarNode.rawValue
 
         self.highlightedBackgroundNode = ASDisplayNode()
         self.highlightedBackgroundNode.isLayerBacked = true
@@ -1215,14 +1213,12 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         
         self.mainContentContainerNode = ASDisplayNode()
         self.mainContentContainerNode.clipsToBounds = true
-        self.mainContentContainerNode.layer.name = ChatListItemNodeName.mainContentContainerNode.rawValue
         
         self.measureNode = TextNode()
         
         self.titleNode = TextNode()
         self.titleNode.isUserInteractionEnabled = false
         self.titleNode.displaysAsynchronously = true
-        self.titleNode.layer.name = ChatListItemNodeName.titleNode.rawValue
         
         self.authorNode = AuthorNode()
         self.authorNode.isUserInteractionEnabled = false
@@ -1230,7 +1226,6 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.textNode = TextNodeWithEntities()
         self.textNode.textNode.isUserInteractionEnabled = false
         self.textNode.textNode.displaysAsynchronously = true
-        self.textNode.textNode.layer.name = ChatListItemNodeName.textNode.rawValue
         
         self.inputActivitiesNode = ChatListInputActivitiesNode()
         self.inputActivitiesNode.isUserInteractionEnabled = false
@@ -1239,13 +1234,11 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.dateNode = TextNode()
         self.dateNode.isUserInteractionEnabled = false
         self.dateNode.displaysAsynchronously = true
-        self.dateNode.layer.name = ChatListItemNodeName.dateNode.rawValue
         
         self.statusNode = ChatListStatusNode()
         self.badgeNode = ChatListBadgeNode()
         self.mentionBadgeNode = ChatListBadgeNode()
         self.onlineNode = PeerOnlineMarkerNode()
-        self.onlineNode.layer.name = ChatListItemNodeName.onlineNode.rawValue
         
         self.forwardedIconNode = ASImageNode()
         self.forwardedIconNode.isLayerBacked = true
@@ -1261,11 +1254,9 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.mutedIconNode.isLayerBacked = true
         self.mutedIconNode.displaysAsynchronously = false
         self.mutedIconNode.displayWithoutProcessing = true
-        self.mutedIconNode.layer.name = ChatListItemNodeName.mutedIconNode.rawValue
         
         self.separatorNode = ASDisplayNode()
         self.separatorNode.isLayerBacked = true
-        self.separatorNode.layer.name = ChatListItemNodeName.separatorNode.rawValue
         
         super.init(layerBacked: false, dynamicBounce: false, rotated: false, seeThrough: false)
         
@@ -1344,6 +1335,16 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
             let avatarTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.avatarStoryTapGesture(_:)))
             self.avatarTapRecognizer = avatarTapRecognizer
             self.avatarNode.view.addGestureRecognizer(avatarTapRecognizer)
+
+            self.avatarContainerNode.layer.name = ChatListItemNodeName.avatarContainerNode.rawValue
+            self.avatarNode.layer.name = ChatListItemNodeName.avatarNode.rawValue
+            self.mainContentContainerNode.layer.name = ChatListItemNodeName.mainContentContainerNode.rawValue
+            self.titleNode.layer.name = ChatListItemNodeName.titleNode.rawValue
+            self.textNode.textNode.layer.name = ChatListItemNodeName.textNode.rawValue
+            self.dateNode.layer.name = ChatListItemNodeName.dateNode.rawValue
+            self.onlineNode.layer.name = ChatListItemNodeName.onlineNode.rawValue
+            self.mutedIconNode.layer.name = ChatListItemNodeName.mutedIconNode.rawValue
+            self.separatorNode.layer.name = ChatListItemNodeName.separatorNode.rawValue
         }
     }
     
