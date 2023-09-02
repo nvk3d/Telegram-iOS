@@ -337,6 +337,10 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
             completion()
         }
     }
+
+    func canAnimateOut() -> Bool {
+        sourceNode?.supernode?.supernode != nil
+    }
 }
 
 public class ChatListControllerImpl: TelegramBaseController, ChatListController {

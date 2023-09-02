@@ -1418,7 +1418,7 @@ private final class ContextControllerNode: ViewControllerTracingNode, UIScrollVi
                 self.withoutBlurDimNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: transitionDuration * animationDurationFactor, removeOnCompletion: false)
             }
 
-            if let animator = animator {
+            if let animator = animator, animator.canAnimateOut() {
                 let animation = ContextContentAnimationOut(source: self.source, projectedContentFrame: originalProjectedContentViewFrame, actionsNode: actionsContainerNode, contentContainerNode: contentContainerNode, contextView: view, scrollView: scrollNode.view)
 
                 animator.animateOut(animation) {
@@ -2394,6 +2394,7 @@ public struct ContextContentAnimationOut {
 public protocol ContextContentAnimator: AnyObject {
     func animateIn(_ animation: ContextContentAnimationIn, completion: @escaping () -> Void)
     func animateOut(_ animation: ContextContentAnimationOut, completion: @escaping () -> Void)
+    func canAnimateOut() -> Bool
 }
 
 public protocol ContextControllerItemsNode: ASDisplayNode {
