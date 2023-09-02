@@ -140,13 +140,13 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
             let animationNode = ChatListContextAnimationNode(presentationData: presentationData)
             let animationView = animationNode.view
 
-            let contentScale = (supernode.frame.width - 12.0 * 2.0) / supernode.frame.width
-            animationNode.updateLayout(size: supernode.frame.size, scale: contentScale, safeInsets: .zero, animated: false)
-
             let convertedAnimationFrame = contextView.convert(sourceNode.frame, from: sourceNode.supernode?.view)
             animationView.frame = convertedAnimationFrame
             contextView.insertSubview(animationView, aboveSubview: contentContainerNode.view)
 
+            animationNode.updateLayout(size: supernode.frame.size, scale: 1.0, safeInsets: .zero, animated: false)
+
+            let contentScale = (supernode.frame.width - 12.0 * 2.0) / supernode.frame.width
             let deltaHeight = animationView.frame.height - animationView.frame.height * contentScale
             let toPosition = CGPoint(x: convertedAnimationFrame.midX, y: floor(contentContainerNode.frame.minY + animationView.frame.height / 2.0) - deltaHeight / 2.0)
             animationView.layer.animateSpring(from: NSValue(cgPoint: CGPoint(x: convertedAnimationFrame.midX, y: convertedAnimationFrame.midY)), to: NSValue(cgPoint: toPosition), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false) { [weak animationView, weak controller] _ in
@@ -159,7 +159,7 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
 
             if let controller = controller {
                 let toBounds = CGRect(origin: .zero, size: CGSize(width: animationView.layer.bounds.width, height: 44.0))
-                animationNode.updateState(.navigationBarPreview, sourceNode: sourceNode, controller: controller, size: toBounds.size, animated: true)
+                animationNode.updateState(.navigationBarPreview, sourceNode: sourceNode, controller: controller, size: toBounds.size, scale: contentScale, animated: true)
 
                 let backgroundHeight = controller.navigationBar?.backgroundNode.bounds.height ?? 44.0
 
@@ -169,6 +169,8 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
                 controller.navigationBar?.layer.mask = navigationLayerMask
                 controller.navigationBar?.buttonsContainerNode.alpha = 0.0
             }
+
+            sourceNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3, delay: 0.1)
 
             let animationMaskLayer = CALayer()
             animationMaskLayer.backgroundColor = UIColor.black.cgColor
@@ -214,8 +216,126 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
         }
     }
 
-    func animateOut(_ completion: @escaping () -> Void) {
-        completion()
+    func animateOut(_ animation: ContextContentAnimationOut, completion: @escaping () -> Void) {
+        let animationDurationFactor: Double = 1.0
+        let springDuration: Double = 0.52 * animationDurationFactor
+        let springDamping: CGFloat = 110.0
+
+        let source = animation.source
+
+        let actionsNode = animation.actionsNode
+        let contentContainerNode = animation.contentContainerNode
+        let contextView = animation.contextView
+        let scrollView = animation.scrollView
+
+        actionsNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3 * animationDurationFactor, removeOnCompletion: false)
+        actionsNode.layer.animateSpring(from: 1.0 as NSNumber, to: 0.2 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
+
+        contentContainerNode.allowsGroupOpacity = true
+        contentContainerNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3 * animationDurationFactor, removeOnCompletion: false, completion: { [weak contentContainerNode] _ in
+            contentContainerNode?.allowsGroupOpacity = false
+        })
+
+        guard let projectedContentFrame = animation.projectedContentFrame else { return }
+
+        let localSourceFrame = contextView.convert(CGRect(origin: CGPoint(x: projectedContentFrame.1.minX, y: projectedContentFrame.1.minY), size: CGSize(width: projectedContentFrame.1.width, height: projectedContentFrame.1.height)), to: scrollView)
+
+        var controller: ViewController?
+        switch source {
+        case let .controller(controllerSource):
+            controllerSource.animatedIn()
+            controller = controllerSource.controller
+
+        default:
+            break
+        }
+
+        let contentContainerOffset = CGPoint(x: localSourceFrame.center.x - contentContainerNode.frame.center.x, y: localSourceFrame.center.y - contentContainerNode.frame.center.y)
+
+        if let supernode = sourceNode?.supernode, let sourceNode = sourceNode {
+            let animationNode = ChatListContextAnimationNode(presentationData: presentationData)
+            let animationView = animationNode.view
+
+            let convertedAnimationFrame = contextView.convert(sourceNode.frame, from: sourceNode.supernode?.view)
+            animationView.frame = convertedAnimationFrame
+            contextView.insertSubview(animationView, aboveSubview: contentContainerNode.view)
+
+            let contentScale = (supernode.frame.width - 12.0 * 2.0) / supernode.frame.width
+            animationNode.updateLayout(size: supernode.frame.size, scale: contentScale, safeInsets: .zero, animated: false)
+
+            if let controller = controller {
+                animationNode.updateState(.navigationBarPreview, sourceNode: sourceNode, controller: controller, size: CGSize(width: supernode.frame.width, height: 44.0), scale: contentScale, animated: false)
+            }
+
+            let deltaHeight = animationView.bounds.height - animationView.bounds.height * contentScale
+            let fromPosition = CGPoint(x: convertedAnimationFrame.midX, y: floor(contentContainerNode.frame.minY + animationView.frame.height / 2.0) - deltaHeight / 2.0)
+            animationView.layer.animateSpring(from: NSValue(cgPoint: fromPosition), to: NSValue(cgPoint: CGPoint(x: convertedAnimationFrame.midX, y: convertedAnimationFrame.midY)), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false) { [weak animationView, weak controller, weak sourceNode] _ in
+                animationView?.removeFromSuperview()
+
+                controller?.navigationBar?.layer.mask = nil
+                controller?.navigationBar?.buttonsContainerNode.alpha = 1.0
+
+                sourceNode?.alpha = 1.0
+            }
+
+            if let controller = controller {
+                let toBounds = CGRect(origin: .zero, size: CGSize(width: animationView.layer.bounds.width, height: supernode.frame.height))
+                animationNode.updateState(.chatListItem, sourceNode: sourceNode, controller: controller, size: toBounds.size, scale: 1.0, animated: true)
+
+                let backgroundHeight = controller.navigationBar?.backgroundNode.bounds.height ?? 44.0
+
+                let navigationLayerMask = CALayer()
+                navigationLayerMask.backgroundColor = UIColor.black.cgColor
+                navigationLayerMask.frame = CGRect(x: 0.0, y: 44.0, width: controller.navigationBar?.backgroundNode.bounds.width ?? 0.0, height: backgroundHeight - 44.0)
+                controller.navigationBar?.layer.mask = navigationLayerMask
+                controller.navigationBar?.buttonsContainerNode.alpha = 0.0
+            }
+
+            sourceNode.alpha = 0.0
+
+            let animationMaskLayer = CALayer()
+            animationMaskLayer.backgroundColor = UIColor.black.cgColor
+            animationMaskLayer.frame = CGRect(origin: .zero, size: convertedAnimationFrame.size)
+            animationMaskLayer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            animationMaskLayer.cornerRadius = 0.0
+            animationView.layer.mask = animationMaskLayer
+
+            let animationMaskToBounds = CGRect(origin: .zero, size: CGSize(width: supernode.frame.width, height: convertedAnimationFrame.height))
+            animationMaskLayer.animate(from: NSNumber(value: Float(14.0)), to: NSNumber(value: Float(0.0)), keyPath: "cornerRadius", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, duration: 0.2 * animationDurationFactor, removeOnCompletion: false)
+            animationMaskLayer.animateSpring(from: NSValue(cgRect: CGRect(origin: .zero, size: convertedAnimationFrame.size)), to: NSValue(cgRect: animationMaskToBounds), keyPath: "bounds", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false)
+
+            let backgroundNode = createWallpaperBackgroundNode(context: context, forChatDisplay: true, useSharedAnimationPhase: true)
+            let backgroundFrame = CGRect(origin: CGPoint(x: (contentContainerNode.bounds.width - contextView.frame.width) / 2.0, y: 0.0), size: CGSize(width: convertedAnimationFrame.width, height: contentContainerNode.bounds.height))
+            backgroundNode.frame = backgroundFrame
+            contentContainerNode.insertSubnode(backgroundNode, at: 0)
+
+            backgroundNode.updateLayout(size: backgroundFrame.size, displayMode: .aspectFill, transition: .immediate)
+            backgroundNode.update(wallpaper: wallpaper)
+
+            let contentMaskFrame = CGRect(origin: .zero, size: contentContainerNode.bounds.size)
+            let contentMaskLayer = CALayer()
+            contentMaskLayer.backgroundColor = UIColor.black.cgColor
+            contentMaskLayer.position = CGPoint(x: contentMaskFrame.midX, y: contentMaskFrame.midY)
+            contentMaskLayer.bounds = CGRect(origin: .zero, size: contentMaskFrame.size)
+            contentContainerNode.layer.mask = contentMaskLayer
+
+            contentContainerNode.clipsToBounds = false
+
+            contentMaskLayer.animate(from: NSNumber(value: Float(14.0)), to: NSNumber(value: Float(0.0)), keyPath: "cornerRadius", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, duration: 0.2 * animationDurationFactor, removeOnCompletion: false) { [weak contentContainerNode] _ in
+                contentContainerNode?.clipsToBounds = true
+            }
+            let contentMaskFinalFrame = contextView.convert(convertedAnimationFrame, to: contentContainerNode.view)
+            contentMaskLayer.animateSpring(from: NSValue(cgPoint: contentMaskLayer.position), to: NSValue(cgPoint: CGPoint(x: contentMaskFinalFrame.midX - contentContainerOffset.x, y: contentMaskFinalFrame.midY - contentContainerOffset.y)), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false)
+            contentMaskLayer.animateSpring(from: NSValue(cgRect: CGRect(origin: .zero, size: contentMaskFrame.size)), to: NSValue(cgRect: CGRect(origin: .zero, size: contentMaskFinalFrame.size)), keyPath: "bounds", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false) { [weak contentContainerNode, weak backgroundNode] _ in
+                contentContainerNode?.layer.mask = nil
+                backgroundNode?.removeFromSupernode()
+            }
+        }
+
+        actionsNode.layer.animateSpring(from: NSValue(cgPoint: CGPoint()), to: NSValue(cgPoint: CGPoint(x: localSourceFrame.center.x - actionsNode.position.x, y: localSourceFrame.center.y - actionsNode.position.y)), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true)
+        contentContainerNode.layer.animateSpring(from: NSValue(cgPoint: CGPoint()), to: NSValue(cgPoint: contentContainerOffset), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false, additive: true) { _ in
+            completion()
+        }
     }
 }
 
