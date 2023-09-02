@@ -134,10 +134,6 @@ final class ChatListContextAnimationNode: ASDisplayNode {
                 }
             }
 
-            find(for: .chatListDateNode, in: chatListItemSnapshot.layer).flatMap { dateLayer in
-                animateAlpha(dateLayer, from: 0.0, to: 1.0, duration: 0.2, delay: 0.1, removeOnCompletion: false, animated: animated)
-            }
-
             let clCredibilityIconLayer = find(for: .chatListCredibilityNode, in: chatListItemSnapshot.layer)
 
             let clTitleLayer = find(for: .chatListTitleNode, in: chatListItemSnapshot.layer)
@@ -182,12 +178,25 @@ final class ChatListContextAnimationNode: ASDisplayNode {
                 animateAlpha(mutedIconLayer, from: 0.0, to: 1.0, duration: 0.2, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, animated: animated)
             }
 
+            let titlePositionDifference = clTitleBeginPosition.x - clTitleFinalPosition.x
+
+            find(for: .chatListDateNode, in: chatListItemSnapshot.layer).flatMap { dateLayer in
+                animateAlpha(dateLayer, from: 0.0, to: 1.0, duration: 0.2, delay: 0.1, animated: animated)
+
+                let beginPosition = CGPoint(x: dateLayer.position.x + titlePositionDifference, y: dateLayer.position.y)
+                let finalPosition = dateLayer.position
+                animateSpring(dateLayer, from: NSValue(cgPoint: beginPosition), to: NSValue(cgPoint: finalPosition), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, animated: animated)
+            }
+
             let clTextNode = find(for: .chatListTextNode, in: chatListItemSnapshot.layer)
             clTextNode.flatMap { textLayer in
                 textLayer.rasterizationScale = UIScreenScale
 
-                animateScale(textLayer, from: 0.8, to: 1.0, duration: 0.25, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, animated: animated)
                 animateAlpha(textLayer, from: 0.0, to: 1.0, duration: 0.25, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, animated: animated)
+
+                let beginPosition = CGPoint(x: textLayer.position.x + titlePositionDifference, y: textLayer.position.y)
+                let finalPosition = textLayer.position
+                animateSpring(textLayer, from: NSValue(cgPoint: beginPosition), to: NSValue(cgPoint: finalPosition), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, animated: animated)
             }
 
             chatListItemSeparatorLayer.flatMap { separatorLayer in
@@ -275,10 +284,6 @@ final class ChatListContextAnimationNode: ASDisplayNode {
                 }
             }
 
-            find(for: .chatListDateNode, in: chatListItemSnapshot.layer).flatMap { dateLayer in
-                animateAlpha(dateLayer, from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, animated: animated)
-            }
-
             let clCredibilityIconLayer = find(for: .chatListCredibilityNode, in: chatListItemSnapshot.layer)
 
             let clTitleLayer = find(for: .chatListTitleNode, in: chatListItemSnapshot.layer)
@@ -323,12 +328,25 @@ final class ChatListContextAnimationNode: ASDisplayNode {
                 animateAlpha(mutedIconLayer, from: 1.0, to: 0.0, duration: 0.2, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, removeOnCompletion: false, animated: animated)
             }
 
+            let titlePositionDifference = clTitleFinalPosition.x - clTitleBeginPosition.x
+
+            find(for: .chatListDateNode, in: chatListItemSnapshot.layer).flatMap { dateLayer in
+                animateAlpha(dateLayer, from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, animated: animated)
+
+                let beginPosition = dateLayer.position
+                let finalPosition = CGPoint(x: beginPosition.x + titlePositionDifference, y: dateLayer.position.y)
+                animateSpring(dateLayer, from: NSValue(cgPoint: beginPosition), to: NSValue(cgPoint: finalPosition), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, animated: animated)
+            }
+
             let clTextNode = find(for: .chatListTextNode, in: chatListItemSnapshot.layer)
             clTextNode.flatMap { textLayer in
                 textLayer.rasterizationScale = UIScreenScale
 
-                animateScale(textLayer, from: 1.0, to: 0.8, duration: 0.25, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, removeOnCompletion: false, animated: animated)
                 animateAlpha(textLayer, from: 1.0, to: 0.0, duration: 0.25, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, removeOnCompletion: false, animated: animated)
+
+                let beginPosition = textLayer.position
+                let finalPosition = CGPoint(x: beginPosition.x + titlePositionDifference, y: textLayer.position.y)
+                animateSpring(textLayer, from: NSValue(cgPoint: beginPosition), to: NSValue(cgPoint: finalPosition), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, animated: animated)
             }
 
             chatListItemSeparatorLayer.flatMap { separatorLayer in
