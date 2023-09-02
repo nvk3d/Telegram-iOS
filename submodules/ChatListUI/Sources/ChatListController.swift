@@ -113,7 +113,7 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
         let scrollView = animation.scrollView
 
         actionsNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2 * animationDurationFactor)
-        actionsNode.layer.animateSpring(from: 0.1 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
+        actionsNode.layer.animateSpring(from: 0.3 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
 
         contentContainerNode.allowsGroupOpacity = true
         contentContainerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.1 * animationDurationFactor, completion: { [weak contentContainerNode] _ in
@@ -210,7 +210,7 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
             }
         }
 
-        actionsNode.layer.animateSpring(from: NSValue(cgPoint: CGPoint(x: localSourceFrame.center.x - actionsNode.position.x, y: localSourceFrame.center.y - actionsNode.position.y)), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true)
+        actionsNode.layer.animateSpring(from: NSValue(cgPoint: CGPoint(x: localSourceFrame.center.x - actionsNode.position.x - actionsNode.bounds.width / 2.0, y: localSourceFrame.center.y - actionsNode.position.y)), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true)
         contentContainerNode.layer.animateSpring(from: NSValue(cgPoint: contentContainerOffset), to: NSValue(cgPoint: CGPoint()), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true) { _ in
             completion()
         }
@@ -229,7 +229,7 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
         let scrollView = animation.scrollView
 
         actionsNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3 * animationDurationFactor, removeOnCompletion: false)
-        actionsNode.layer.animateSpring(from: 1.0 as NSNumber, to: 0.2 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
+        actionsNode.layer.animateSpring(from: 1.0 as NSNumber, to: 0.3 as NSNumber, keyPath: "transform.scale", duration: springDuration, initialVelocity: 0.0, damping: springDamping)
 
         contentContainerNode.allowsGroupOpacity = true
         contentContainerNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3 * animationDurationFactor, removeOnCompletion: false, completion: { [weak contentContainerNode] _ in
@@ -332,7 +332,7 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
             }
         }
 
-        actionsNode.layer.animateSpring(from: NSValue(cgPoint: CGPoint()), to: NSValue(cgPoint: CGPoint(x: localSourceFrame.center.x - actionsNode.position.x, y: localSourceFrame.center.y - actionsNode.position.y)), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, additive: true)
+        actionsNode.layer.animateSpring(from: NSValue(cgPoint: CGPoint()), to: NSValue(cgPoint: CGPoint(x: localSourceFrame.center.x - actionsNode.position.x - actionsNode.bounds.width / 2.0, y: localSourceFrame.center.y - actionsNode.position.y)), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false, additive: true)
         contentContainerNode.layer.animateSpring(from: NSValue(cgPoint: CGPoint()), to: NSValue(cgPoint: contentContainerOffset), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false, additive: true) { _ in
             completion()
         }
