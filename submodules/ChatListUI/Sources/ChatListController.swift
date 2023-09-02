@@ -84,14 +84,16 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
     // MARK: - Properties
 
     private let context: AccountContext
+    private let presentationData: PresentationData
     private let wallpaper: TelegramWallpaper
 
     private weak var sourceNode: ASDisplayNode?
 
     // MARK: - Init
 
-    init(context: AccountContext, sourceNode: ASDisplayNode, wallpaper: TelegramWallpaper) {
+    init(context: AccountContext, presentationData: PresentationData, sourceNode: ASDisplayNode, wallpaper: TelegramWallpaper) {
         self.context = context
+        self.presentationData = presentationData
         self.sourceNode = sourceNode
         self.wallpaper = wallpaper
     }
@@ -122,48 +124,72 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
 
         let localSourceFrame = contextView.convert(CGRect(origin: CGPoint(x: projectedContentFrame.1.minX, y: projectedContentFrame.1.minY), size: CGSize(width: projectedContentFrame.1.width, height: projectedContentFrame.1.height)), to: scrollView)
 
+        var controller: ViewController?
         switch source {
-        case let .controller(controller):
-            controller.animatedIn()
+        case let .controller(controllerSource):
+            controllerSource.animatedIn()
+            controller = controllerSource.controller
+
         default:
             break
         }
 
         let contentContainerOffset = CGPoint(x: localSourceFrame.center.x - contentContainerNode.frame.center.x, y: localSourceFrame.center.y - contentContainerNode.frame.center.y)
 
-        if let sourceNode = sourceNode, let snapshotView = sourceNode.view.snapshotView(afterScreenUpdates: false) {
-            let convertedSnapshotFrame = contextView.convert(snapshotView.frame, from: sourceNode.supernode?.view)
-            snapshotView.frame = convertedSnapshotFrame
-            snapshotView.backgroundColor = .white
-            contextView.insertSubview(snapshotView, aboveSubview: contentContainerNode.view)
+        if let supernode = sourceNode?.supernode, let sourceNode = sourceNode {
+            let animationNode = ChatListContextAnimationNode(presentationData: presentationData)
+            let animationView = animationNode.view
 
-            snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: springDuration, removeOnCompletion: false)
+            let contentScale = (supernode.frame.width - 12.0 * 2.0) / supernode.frame.width
+            animationNode.updateLayout(size: supernode.frame.size, scale: contentScale, safeInsets: .zero, animated: false)
 
-            let toPosition = CGPoint(x: convertedSnapshotFrame.midX, y: contentContainerNode.frame.minY + snapshotView.frame.height / 2.0)
-            snapshotView.layer.animateSpring(from: NSValue(cgPoint: CGPoint(x: convertedSnapshotFrame.midX, y: convertedSnapshotFrame.midY)), to: NSValue(cgPoint: toPosition), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping) { [weak snapshotView] _ in
-                snapshotView?.removeFromSuperview()
+            let convertedAnimationFrame = contextView.convert(sourceNode.frame, from: sourceNode.supernode?.view)
+            animationView.frame = convertedAnimationFrame
+            contextView.insertSubview(animationView, aboveSubview: contentContainerNode.view)
+
+            let deltaHeight = animationView.frame.height - animationView.frame.height * contentScale
+            let toPosition = CGPoint(x: convertedAnimationFrame.midX, y: floor(contentContainerNode.frame.minY + animationView.frame.height / 2.0) - deltaHeight / 2.0)
+            animationView.layer.animateSpring(from: NSValue(cgPoint: CGPoint(x: convertedAnimationFrame.midX, y: convertedAnimationFrame.midY)), to: NSValue(cgPoint: toPosition), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false) { [weak animationView, weak controller] _ in
+                animationView?.removeFromSuperview()
+
+                controller?.navigationBar?.layer.mask = nil
+                controller?.navigationBar?.buttonsContainerNode.alpha = 1.0
+            }
+            animationView.layer.position = toPosition
+
+            if let controller = controller {
+                let toBounds = CGRect(origin: .zero, size: CGSize(width: animationView.layer.bounds.width, height: 44.0))
+                animationNode.updateState(.navigationBarPreview, sourceNode: sourceNode, controller: controller, size: toBounds.size, animated: true)
+
+                let backgroundHeight = controller.navigationBar?.backgroundNode.bounds.height ?? 44.0
+
+                let navigationLayerMask = CALayer()
+                navigationLayerMask.backgroundColor = UIColor.black.cgColor
+                navigationLayerMask.frame = CGRect(x: 0.0, y: 44.0, width: controller.navigationBar?.backgroundNode.bounds.width ?? 0.0, height: backgroundHeight - 44.0)
+                controller.navigationBar?.layer.mask = navigationLayerMask
+                controller.navigationBar?.buttonsContainerNode.alpha = 0.0
             }
 
-            let snapshotMaskLayer = CALayer()
-            snapshotMaskLayer.backgroundColor = UIColor.black.cgColor
-            snapshotMaskLayer.frame = CGRect(origin: .zero, size: convertedSnapshotFrame.size)
-            snapshotMaskLayer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-            snapshotMaskLayer.cornerRadius = 0.0
-            snapshotView.layer.mask = snapshotMaskLayer
+            let animationMaskLayer = CALayer()
+            animationMaskLayer.backgroundColor = UIColor.black.cgColor
+            animationMaskLayer.frame = CGRect(origin: .zero, size: convertedAnimationFrame.size)
+            animationMaskLayer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            animationMaskLayer.cornerRadius = 0.0
+            animationView.layer.mask = animationMaskLayer
 
-            let snapshotMaskToBounds = CGRect(origin: .zero, size: CGSize(width: contentContainerNode.frame.width, height: convertedSnapshotFrame.height))
-            snapshotMaskLayer.animate(from: NSNumber(value: Float(0.0)), to: NSNumber(value: Float(14.0)), keyPath: "cornerRadius", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, duration: 0.2 * animationDurationFactor, removeOnCompletion: false)
-            snapshotMaskLayer.animateSpring(from: NSValue(cgRect: CGRect(origin: .zero, size: convertedSnapshotFrame.size)), to: NSValue(cgRect: snapshotMaskToBounds), keyPath: "bounds", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false)
+            let animationMaskToBounds = CGRect(origin: .zero, size: CGSize(width: supernode.frame.width, height: convertedAnimationFrame.height))
+            animationMaskLayer.animate(from: NSNumber(value: Float(0.0)), to: NSNumber(value: Float(14.0)), keyPath: "cornerRadius", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, duration: 0.2 * animationDurationFactor, removeOnCompletion: false)
+            animationMaskLayer.animateSpring(from: NSValue(cgRect: CGRect(origin: .zero, size: convertedAnimationFrame.size)), to: NSValue(cgRect: animationMaskToBounds), keyPath: "bounds", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false)
 
             let backgroundNode = createWallpaperBackgroundNode(context: context, forChatDisplay: true, useSharedAnimationPhase: true)
-            let backgroundFrame = CGRect(origin: CGPoint(x: (contentContainerNode.frame.width - contextView.frame.width) / 2.0, y: 0.0), size: CGSize(width: convertedSnapshotFrame.width, height: contentContainerNode.frame.height))
+            let backgroundFrame = CGRect(origin: CGPoint(x: (contentContainerNode.frame.width - contextView.frame.width) / 2.0, y: 0.0), size: CGSize(width: convertedAnimationFrame.width, height: contentContainerNode.frame.height))
             backgroundNode.frame = backgroundFrame
             contentContainerNode.insertSubnode(backgroundNode, at: 0)
 
             backgroundNode.updateLayout(size: backgroundFrame.size, displayMode: .aspectFill, transition: .immediate)
             backgroundNode.update(wallpaper: wallpaper)
 
-            let contentMaskFrame = contextView.convert(convertedSnapshotFrame, to: contentContainerNode.view)
+            let contentMaskFrame = contextView.convert(convertedAnimationFrame, to: contentContainerNode.view)
             let contentMaskLayer = CALayer()
             contentMaskLayer.backgroundColor = UIColor.black.cgColor
             contentMaskLayer.position = CGPoint(x: contentMaskFrame.midX - contentContainerOffset.x, y: contentMaskFrame.midY - contentContainerOffset.y)
@@ -1443,7 +1469,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                             source = .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController))
                         }
 
-                        let animator: ContextContentAnimator? = ContextContentAnimatorImpl(context: strongSelf.context, sourceNode: node, wallpaper: strongSelf.presentationData.chatWallpaper)
+                        let animator: ContextContentAnimator? = ContextContentAnimatorImpl(
+                            context: strongSelf.context,
+                            presentationData: strongSelf.presentationData,
+                            sourceNode: node,
+                            wallpaper: strongSelf.presentationData.chatWallpaper
+                        )
                         let contextController = ContextController(account: strongSelf.context.account, presentationData: strongSelf.presentationData, source: source, items: chatContextMenuItems(context: strongSelf.context, peerId: peer.peerId, promoInfo: promoInfo, source: .chatList(filter: strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.chatListFilter), chatListController: strongSelf, joined: joined) |> map { ContextController.Items(content: .list($0)) }, animator: animator, gesture: gesture)
                         strongSelf.presentInGlobalOverlay(contextController)
                     }

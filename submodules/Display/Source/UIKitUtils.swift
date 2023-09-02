@@ -477,6 +477,7 @@ private func makeSubtreeSnapshot(layer: CALayer, keepPortals: Bool = false, keep
     view.layer.contentsGravity = layer.contentsGravity
     view.layer.masksToBounds = layer.masksToBounds
     view.layer.layerTintColor = layer.layerTintColor
+    view.layer.name = layer.name
     if let mask = layer.mask {
         if let shapeMask = mask as? CAShapeLayer {
             let maskLayer = CAShapeLayer()
@@ -494,6 +495,7 @@ private func makeSubtreeSnapshot(layer: CALayer, keepPortals: Bool = false, keep
             maskLayer.bounds = mask.bounds
             maskLayer.anchorPoint = mask.anchorPoint
             maskLayer.layerTintColor = mask.layerTintColor
+            maskLayer.name = mask.name
             view.layer.mask = maskLayer
         }
     }

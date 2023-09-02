@@ -495,7 +495,7 @@ open class NavigationBar: ASDisplayNode {
     
     public let stripeNode: ASDisplayNode
     public let clippingNode: SparseNode
-    private let buttonsContainerNode: ASDisplayNode
+    public let buttonsContainerNode: ASDisplayNode
     
     public private(set) var contentNode: NavigationBarContentNode?
     public private(set) var secondaryContentNode: ASDisplayNode?

@@ -81,6 +81,11 @@ public enum ChatTitleContent: Equatable {
     }
 }
 
+public enum ChatTitleViewName: String {
+    case activityNode
+    case titleTextNode
+}
+
 private enum ChatTitleIcon {
     case none
     case lock
@@ -629,6 +634,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         
         self.titleContainerView = PortalSourceView()
         self.titleTextNode = ImmediateAnimatedCountLabelNode()
+        self.titleTextNode.layer.name = ChatTitleViewName.titleTextNode.rawValue
         
         self.titleLeftIconNode = ASImageNode()
         self.titleLeftIconNode.isLayerBacked = true
@@ -644,6 +650,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         self.titleCredibilityIconView.isUserInteractionEnabled = false
         
         self.activityNode = ChatTitleActivityNode()
+        self.activityNode.layer.name = ChatTitleViewName.activityNode.rawValue
         self.button = HighlightTrackingButtonNode()
         
         super.init(frame: CGRect())

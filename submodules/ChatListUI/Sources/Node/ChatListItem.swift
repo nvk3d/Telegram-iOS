@@ -27,6 +27,19 @@ import ComponentFlow
 import EmojiStatusComponent
 import AvatarVideoNode
 
+public enum ChatListItemNodeName: String {
+    case avatarContainerNode
+    case avatarNode
+    case mainContentContainerNode
+    case onlineNode
+    case dateNode
+    case titleNode
+    case textNode
+    case credibilityIconView
+    case mutedIconNode
+    case separatorNode
+}
+
 public enum ChatListItemContent {
     public struct ThreadInfo: Equatable {
         public var id: Int64
@@ -1191,8 +1204,10 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.backgroundNode.displaysAsynchronously = false
         
         self.avatarContainerNode = ASDisplayNode()
+        self.avatarContainerNode.layer.name = ChatListItemNodeName.avatarContainerNode.rawValue
         self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 26.0))
-        
+        self.avatarNode.layer.name = ChatListItemNodeName.avatarNode.rawValue
+
         self.highlightedBackgroundNode = ASDisplayNode()
         self.highlightedBackgroundNode.isLayerBacked = true
         
@@ -1200,12 +1215,14 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         
         self.mainContentContainerNode = ASDisplayNode()
         self.mainContentContainerNode.clipsToBounds = true
+        self.mainContentContainerNode.layer.name = ChatListItemNodeName.mainContentContainerNode.rawValue
         
         self.measureNode = TextNode()
         
         self.titleNode = TextNode()
         self.titleNode.isUserInteractionEnabled = false
         self.titleNode.displaysAsynchronously = true
+        self.titleNode.layer.name = ChatListItemNodeName.titleNode.rawValue
         
         self.authorNode = AuthorNode()
         self.authorNode.isUserInteractionEnabled = false
@@ -1213,6 +1230,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.textNode = TextNodeWithEntities()
         self.textNode.textNode.isUserInteractionEnabled = false
         self.textNode.textNode.displaysAsynchronously = true
+        self.textNode.textNode.layer.name = ChatListItemNodeName.textNode.rawValue
         
         self.inputActivitiesNode = ChatListInputActivitiesNode()
         self.inputActivitiesNode.isUserInteractionEnabled = false
@@ -1221,11 +1239,13 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.dateNode = TextNode()
         self.dateNode.isUserInteractionEnabled = false
         self.dateNode.displaysAsynchronously = true
+        self.dateNode.layer.name = ChatListItemNodeName.dateNode.rawValue
         
         self.statusNode = ChatListStatusNode()
         self.badgeNode = ChatListBadgeNode()
         self.mentionBadgeNode = ChatListBadgeNode()
         self.onlineNode = PeerOnlineMarkerNode()
+        self.onlineNode.layer.name = ChatListItemNodeName.onlineNode.rawValue
         
         self.forwardedIconNode = ASImageNode()
         self.forwardedIconNode.isLayerBacked = true
@@ -1241,9 +1261,11 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.mutedIconNode.isLayerBacked = true
         self.mutedIconNode.displaysAsynchronously = false
         self.mutedIconNode.displayWithoutProcessing = true
+        self.mutedIconNode.layer.name = ChatListItemNodeName.mutedIconNode.rawValue
         
         self.separatorNode = ASDisplayNode()
         self.separatorNode.isLayerBacked = true
+        self.separatorNode.layer.name = ChatListItemNodeName.separatorNode.rawValue
         
         super.init(layerBacked: false, dynamicBounce: false, rotated: false, seeThrough: false)
         
@@ -1529,7 +1551,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             if let item = self.item, case .chatList = item.index {
-                self.onlineNode.setImage(PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .highlighted, voiceChat: self.onlineIsVoiceChat), color: nil, transition: transition)
+                self.onlineNode.setImage(PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .regular, voiceChat: self.onlineIsVoiceChat), color: nil, transition: transition)
             }
         } else {
             if self.highlightedBackgroundNode.supernode != nil {
@@ -3018,7 +3040,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                     
                     let onlineIcon: UIImage?
                     if strongSelf.reallyHighlighted {
-                        onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .highlighted, voiceChat: onlineIsVoiceChat)
+                        onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .regular, voiceChat: onlineIsVoiceChat)
                     } else if case let .chatList(index) = item.index, index.pinningIndex != nil {
                         onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .pinned, voiceChat: onlineIsVoiceChat)
                     } else {
@@ -3493,6 +3515,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                             credibilityIconView = current
                         } else {
                             credibilityIconView = ComponentHostView<Empty>()
+                            credibilityIconView.layer.name = ChatListItemNodeName.credibilityIconView.rawValue
                             strongSelf.credibilityIconView = credibilityIconView
                             strongSelf.mainContentContainerNode.view.addSubview(credibilityIconView)
                         }
