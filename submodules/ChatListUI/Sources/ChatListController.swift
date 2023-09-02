@@ -1589,12 +1589,9 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                             source = .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController))
                         }
 
-                        let animator: ContextContentAnimator? = ContextContentAnimatorImpl(
-                            context: strongSelf.context,
-                            presentationData: strongSelf.presentationData,
-                            sourceNode: node,
-                            wallpaper: strongSelf.presentationData.chatWallpaper
-                        )
+                        let animator: ContextContentAnimator? = strongSelf.validLayout?.orientation == .portrait
+                            ? ContextContentAnimatorImpl(context: strongSelf.context, presentationData: strongSelf.presentationData, sourceNode: node, wallpaper: strongSelf.presentationData.chatWallpaper)
+                            : nil
                         let contextController = ContextController(account: strongSelf.context.account, presentationData: strongSelf.presentationData, source: source, items: chatContextMenuItems(context: strongSelf.context, peerId: peer.peerId, promoInfo: promoInfo, source: .chatList(filter: strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.chatListFilter), chatListController: strongSelf, joined: joined) |> map { ContextController.Items(content: .list($0)) }, animator: animator, gesture: gesture)
                         strongSelf.presentInGlobalOverlay(contextController)
                     }
