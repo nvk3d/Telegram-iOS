@@ -347,6 +347,189 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
     }
 }
 
+final class ChatListArchiveBottomNode: ASDisplayNode {
+    // MARK: - Children
+
+    enum State {
+        case animation
+        case interaction
+    }
+
+    // MARK: - Properties
+
+    var archiveHiddenByDefault: Bool = false
+    var archiveHidden: Bool = false
+    var archiveIncluded: Bool = false
+
+    private(set) var activated: Bool = false
+    private(set) var state: State = .interaction
+
+    private let disabledLeftColor = UIColor(rgb: 0xacb0b8)
+    private let disabledRightColor = UIColor(rgb: 0xd4d4da)
+
+    private let enabledLeftColor = UIColor(rgb: 0x397ce8)
+    private let enabledRightColor = UIColor(rgb: 0x80bdf8)
+
+    private var size: CGSize = .zero
+    private var previousSize: CGSize = .zero
+    private var additionalHeight: CGFloat = 0.0
+
+    private var animator: DisplayLinkAnimator?
+
+    // MARK: - Layers
+
+    private let backgroundGradientLayer: CAGradientLayer
+    private let gradientLayer: CAGradientLayer
+    private let indicatorLayer: CALayer
+    private let circleLayer: CALayer
+
+    // MARK: - Init
+
+    override init() {
+        backgroundGradientLayer = CAGradientLayer()
+        backgroundGradientLayer.colors = [disabledLeftColor, disabledRightColor].map { $0.cgColor }
+        backgroundGradientLayer.startPoint = CGPoint(x: 0.0, y: 0.5)
+        backgroundGradientLayer.endPoint = CGPoint(x: 1.0, y: 0.5)
+
+        gradientLayer = CAGradientLayer()
+        gradientLayer.colors = [disabledLeftColor, disabledRightColor].map { $0.cgColor }
+        gradientLayer.startPoint = CGPoint(x: 0.0, y: 0.5)
+        gradientLayer.endPoint = CGPoint(x: 1.0, y: 0.5)
+
+        indicatorLayer = CALayer()
+        indicatorLayer.backgroundColor = UIColor.white.withAlphaComponent(0.3).cgColor
+        indicatorLayer.cornerRadius = 10.0
+
+        circleLayer = CALayer()
+        circleLayer.backgroundColor = UIColor.white.cgColor
+        circleLayer.cornerRadius = 10.0
+        circleLayer.transform = CATransform3DMakeRotation(.pi, 0.0, 0.0, 1.0)
+
+        let circleMaskLayer = CAShapeLayer()
+        circleMaskLayer.contents = UIImage(bundleImageName: "Chat/ChatListArrowUp")?.cgImage
+        circleMaskLayer.contentsGravity = .resizeAspect
+        circleMaskLayer.fillRule = .evenOdd
+        circleLayer.mask = circleMaskLayer
+
+        super.init()
+
+        layer.masksToBounds = true
+
+        layer.addSublayer(backgroundGradientLayer)
+        layer.addSublayer(gradientLayer)
+        layer.addSublayer(indicatorLayer)
+        layer.addSublayer(circleLayer)
+    }
+
+    // MARK: - Interface
+
+    func animate() {
+        guard state == .interaction else { return }
+        state = .animation
+
+        let fullMaskLayer = CALayer()
+        fullMaskLayer.backgroundColor = UIColor.black.cgColor
+        fullMaskLayer.position = CGPoint(x: 10.0 + 30.0, y: 8.0 + 30.0)
+        fullMaskLayer.bounds = CGRect(origin: .zero, size: CGSize(width: size.width * 2.0, height: size.width * 2.0))
+        fullMaskLayer.cornerRadius = size.width
+        layer.mask = fullMaskLayer
+
+        let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
+        transition.updateAlpha(layer: layer, alpha: 0.0)
+        transition.updateCornerRadius(layer: fullMaskLayer, cornerRadius: 30.0)
+        transition.updateBounds(layer: fullMaskLayer, bounds: CGRect(origin: .zero, size: CGSize(width: 60.0, height: 60.0))) { [weak self] _ in
+            guard let self = self else { return }
+
+            self.activated = false
+            self.state = .interaction
+
+            self.view.removeFromSuperview()
+        }
+    }
+
+    func canStartInteraction() -> Bool {
+        archiveHiddenByDefault && archiveHidden && archiveIncluded
+    }
+
+    func update(size: CGSize, safeInsets: UIEdgeInsets, transition: Transition) {
+        self.size = size
+
+        let previousActivated: Bool = activated
+
+        switch state {
+        case .animation:
+            previousSize = size
+
+        case .interaction:
+            previousSize = size
+            activated = size.height >= 76.0
+        }
+
+        let gradientFrame = CGRect(origin: .zero, size: size)
+        transition.setFrame(layer: backgroundGradientLayer, frame: gradientFrame)
+        transition.setFrame(layer: gradientLayer, frame: gradientFrame)
+
+        let indicatorFrame = CGRect(origin: CGPoint(x: 24.0, y: 6.0), size: CGSize(width: 20.0, height: size.height - 12.0))
+        transition.setFrame(layer: indicatorLayer, frame: indicatorFrame)
+
+        let circleFrame = CGRect(origin: CGPoint(x: indicatorFrame.minX, y: indicatorFrame.maxY - 20.0), size: CGSize(width: 20.0, height: 20.0))
+        transition.setFrame(layer: circleLayer, frame: circleFrame)
+        if let mask = circleLayer.mask {
+            transition.setFrame(layer: mask, frame: CGRect(origin: .zero, size: circleFrame.size))
+        }
+
+        if let gradientMask = gradientLayer.mask {
+            transition.setPosition(layer: gradientMask, position: CGPoint(x: circleFrame.midX, y: circleFrame.midY))
+        }
+
+        if activated != previousActivated {
+            let activeColors: [CGColor] = [enabledLeftColor, enabledRightColor].map { $0.cgColor }
+            let inactiveColors: [CGColor] = [disabledLeftColor, disabledRightColor].map { $0.cgColor }
+
+            let maskBeginFrame = activated ? circleFrame : CGRect(origin: .zero, size: CGSize(width: size.width * 2.0, height: size.width * 2.0))
+            let maskEndFrame = activated ? CGRect(origin: .zero, size: CGSize(width: size.width * 2.0, height: size.width * 2.0)) : circleFrame
+
+            let maskBeginCornerRadius: CGFloat = activated ? 10.0 : size.width
+            let maskEndCornerRadius: CGFloat = activated ? size.width : 10.0
+
+            let mask = CALayer()
+            mask.position = CGPoint(x: circleFrame.midX, y: circleFrame.midY)
+            mask.bounds = CGRect(origin: .zero, size: maskBeginFrame.size)
+            mask.backgroundColor = UIColor.black.cgColor
+            mask.cornerRadius = maskBeginCornerRadius
+
+            disableActions {
+                gradientLayer.mask = mask
+            }
+
+            let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
+            transition.updateCornerRadius(layer: mask, cornerRadius: maskEndCornerRadius)
+            transition.updateBounds(layer: mask, bounds: maskEndFrame) { [weak self] finished in
+                guard let self = self else { return }
+                guard finished else { return }
+
+                if !self.activated {
+                    self.disableActions { self.gradientLayer.colors = inactiveColors }
+                }
+                self.gradientLayer.mask = nil
+            }
+
+            transition.updateTransformRotation(layer: circleLayer, angle: activated ? 0.0 : .pi)
+
+            if activated {
+                gradientLayer.colors = activated ? activeColors : inactiveColors
+            }
+        }
+    }
+
+    private func disableActions(_ block: () -> Void) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        block()
+        CATransaction.commit()
+    }
+}
+
 public class ChatListControllerImpl: TelegramBaseController, ChatListController {
     private var validLayout: ContainerViewLayout?
     
@@ -423,6 +606,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
     
     var searchTabsNode: SparseNode?
+
+    var archiveBottomNode: ChatListArchiveBottomNode?
     
     private var hasDownloads: Bool = false
     private var activeDownloadsDisposable: Disposable?
@@ -476,6 +661,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     private var preloadStoryResourceDisposables: [MediaId: Disposable] = [:]
     
     private var sharedOpenStoryProgressDisposable = MetaDisposable()
+
+    private var archiveDataDisposable: Disposable?
     
     private var fullScreenEffectView: RippleEffectView?
     
@@ -510,6 +697,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.tabsNode = SparseNode()
         self.tabContainerNode = ChatListFilterTabContainerNode()
         self.tabsNode.addSubnode(self.tabContainerNode)
+
+        self.archiveBottomNode = ChatListArchiveBottomNode()
                 
         super.init(context: context, navigationBarPresentationData: nil, mediaAccessoryPanelVisibility: .always, locationBroadcastPanelSource: .summary, groupCallPanelSource: groupCallPanelSource)
         
@@ -609,6 +798,16 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 }
             case .forum:
                 break
+            }
+
+            archiveDataDisposable = chatListDisplayNode.mainContainerNode.currentArchiveData.start { [weak self] data in
+                guard let self = self else { return }
+
+                self.archiveBottomNode?.archiveHiddenByDefault = data.archiveHiddenByDefault
+                self.archiveBottomNode?.archiveHidden = data.archiveHidden
+                self.archiveBottomNode?.archiveIncluded = data.doesIncludeArchive
+
+                print("archive data { default: \(data.archiveHiddenByDefault), hidden: \(data.archiveHidden), include: \(data.doesIncludeArchive) }")
             }
         }
         
@@ -1049,6 +1248,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.storyProgressDisposable?.dispose()
         self.storiesPostingAvailabilityDisposable?.dispose()
         self.sharedOpenStoryProgressDisposable.dispose()
+        self.archiveDataDisposable?.dispose()
     }
     
     private func updateNavigationMetadata() {

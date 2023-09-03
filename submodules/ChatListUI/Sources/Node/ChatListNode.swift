@@ -1080,6 +1080,12 @@ public enum ChatListNodeEmptyState: Equatable {
     case empty(isLoading: Bool, hasArchiveInfo: Bool)
 }
 
+public struct ChatListNodeArchiveData: Equatable {
+    public let archiveHiddenByDefault: Bool
+    public let archiveHidden: Bool
+    public let doesIncludeArchive: Bool
+}
+
 public final class ChatListNode: ListView {
     public enum OpenStoriesSubject {
         case peer(EnginePeer.Id)
@@ -1171,6 +1177,16 @@ public final class ChatListNode: ListView {
     private let chatListLocation = ValuePromise<ChatListNodeLocation>()
     private let chatListDisposable = MetaDisposable()
     private var activityStatusesDisposable: Disposable?
+
+    var archiveDataSignal: Signal<ChatListNodeArchiveData, NoError> {
+        archiveDataValue.get()
+    }
+    private lazy var archiveDataValue = ValuePromise(currentArchiveData)
+    private var currentArchiveData = ChatListNodeArchiveData(archiveHiddenByDefault: false, archiveHidden: true, doesIncludeArchive: false) {
+        didSet {
+            archiveDataValue.set(currentArchiveData)
+        }
+    }
     
     private let scrollToTopOptionPromise = Promise<ChatListGlobalScrollOption>(.none)
     public var scrollToTopOption: Signal<ChatListGlobalScrollOption, NoError> {
@@ -2440,6 +2456,7 @@ public final class ChatListNode: ListView {
                         state.hiddenItemShouldBeTemporaryRevealed = false
                         return state
                     }
+                    strongSelf.updateArchiveHidden(true)
                 }
                 if !refreshStoryPeerIds.isEmpty {
                     strongSelf.context.account.viewTracker.refreshStoryStatsForPeerIds(peerIds: refreshStoryPeerIds)
@@ -2939,6 +2956,7 @@ public final class ChatListNode: ListView {
                 state.hiddenItemShouldBeTemporaryRevealed = true
                 return state
             }
+            self.updateArchiveHidden(false)
         }
     }
     
@@ -3004,6 +3022,13 @@ public final class ChatListNode: ListView {
         if state != self.currentState {
             self.currentState = state
             self.statePromise.set(state)
+        }
+    }
+
+    private func updateArchiveHidden(_ value: Bool) {
+        let data = currentArchiveData
+        if data.archiveHidden != value {
+            currentArchiveData = ChatListNodeArchiveData(archiveHiddenByDefault: data.archiveHiddenByDefault, archiveHidden: value, doesIncludeArchive: data.doesIncludeArchive)
         }
     }
     
@@ -3217,6 +3242,19 @@ public final class ChatListNode: ListView {
                     if !strongSelf.hasUpdatedAppliedChatListFilterValueOnce || transition.chatListView.filter != strongSelf.currentAppliedChatListFilterValue {
                         strongSelf.currentAppliedChatListFilterValue = transition.chatListView.filter
                         strongSelf.appliedChatListFilterValue.set(.single(transition.chatListView.filter))
+                    }
+
+                    var doesIncludeArchive = false
+                    var doesIncludeHiddenByDefaultArchive = false
+                    for entry in transition.chatListView.filteredEntries {
+                        if case let .GroupReferenceEntry(groupReferenceEntry) = entry {
+                            doesIncludeArchive = true
+                            doesIncludeHiddenByDefaultArchive = groupReferenceEntry.hiddenByDefault
+                        }
+                    }
+                    let currentArchiveData = strongSelf.currentArchiveData
+                    if currentArchiveData.doesIncludeArchive != doesIncludeArchive || currentArchiveData.archiveHiddenByDefault != doesIncludeHiddenByDefaultArchive {
+                        strongSelf.currentArchiveData = ChatListNodeArchiveData(archiveHiddenByDefault: doesIncludeHiddenByDefaultArchive, archiveHidden: currentArchiveData.archiveHidden, doesIncludeArchive: doesIncludeArchive)
                     }
                     
                     completion()

@@ -846,6 +846,10 @@ public final class ChatListContainerNode: ASDisplayNode, UIGestureRecognizerDele
     var currentItemState: Signal<(state: ChatListNodeState, filterId: Int32?), NoError> {
         return self.currentItemStateValue.get()
     }
+
+    var currentArchiveData: Signal<ChatListNodeArchiveData, NoError> {
+        currentItemNode.archiveDataSignal
+    }
     
     public var currentItemFilterUpdated: ((ChatListFilterTabEntryId, CGFloat, ContainedViewLayoutTransition, Bool) -> Void)?
     public var currentItemFilter: ChatListFilterTabEntryId {
@@ -1763,6 +1767,8 @@ final class ChatListControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
     
     private var allowOverscrollItemExpansion: Bool = false
     private var currentOverscrollItemExpansionTimestamp: Double?
+
+    private weak var archiveItemNode: ChatListItemNode?
     
     private var containerLayout: (layout: ContainerViewLayout, navigationBarHeight: CGFloat, visualNavigationHeight: CGFloat, cleanNavigationBarHeight: CGFloat, storiesInset: CGFloat)?
     
@@ -2146,6 +2152,33 @@ final class ChatListControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
         }
         
         if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View {
+            if let archiveBottomNode = self.controller?.archiveBottomNode {
+                if archiveBottomNode.archiveIncluded && archiveBottomNode.archiveHiddenByDefault && archiveBottomNode.archiveHidden || archiveBottomNode.state == .animation {
+                    let navigationFrame = navigationBarComponentView.frame
+
+                    if archiveBottomNode.view.superview == nil {
+                        self.view.insertSubview(archiveBottomNode.view, belowSubview: navigationBarComponentView)
+
+                        let frame = CGRect(origin: CGPoint(x: 0.0, y: navigationFrame.maxY), size: CGSize(width: navigationFrame.width, height: 0.0))
+                        let immediate: ContainedViewLayoutTransition = .immediate
+                        immediate.updateFrame(node: archiveBottomNode, frame: frame)
+                        archiveBottomNode.update(size: frame.size, safeInsets: containerLayout?.layout.safeInsets ?? .zero, transition: Transition(immediate))
+                    }
+
+                    if self.archiveItemNode == nil {
+                        archiveItemNode = findChatListItemNode(with: .archive)
+                    }
+
+                    if let archiveItemNode = archiveItemNode {
+                        offset = max(0.0, offset)
+
+                        let frame = CGRect(origin: CGPoint(x: 0.0, y: navigationFrame.maxY), size: CGSize(width: navigationFrame.width, height: max(0.0, archiveItemNode.apparentFrame.maxY - navigationFrame.maxY)))
+                        transition.updateFrame(node: archiveBottomNode, frame: frame)
+                        archiveBottomNode.update(size: frame.size, safeInsets: containerLayout?.layout.safeInsets ?? .zero, transition: Transition(transition))
+                    }
+                }
+            }
+
             navigationBarComponentView.applyScroll(offset: offset, allowAvatarsExpansion: allowAvatarsExpansion, forceUpdate: false, transition: Transition(transition).withUserData(ChatListNavigationBar.AnimationHint(
                 disableStoriesAnimations: self.tempDisableStoriesAnimations,
                 crossfadeStoryPeers: false
@@ -2471,11 +2504,11 @@ final class ChatListControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
                             manuallyAllow = true
                         }
                         
-                        if manuallyAllow, case let .known(value) = offset, value + listView.tempTopInset <= -40.0 {
+                        if manuallyAllow, case let .known(value) = offset, value + listView.tempTopInset <= -76.0 {
                             overscrollHiddenChatItemsAllowed = true
                         }
                     }
-                
+
                     if overscrollHiddenChatItemsAllowed {
                         if self.allowOverscrollItemExpansion {
                             let timestamp = CACurrentMediaTime()
@@ -2486,12 +2519,6 @@ final class ChatListControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
                             
                             if let currentOverscrollItemExpansionTimestamp = self.currentOverscrollItemExpansionTimestamp, currentOverscrollItemExpansionTimestamp <= timestamp - 0.0 {
                                 self.allowOverscrollItemExpansion = false
-                                
-                                if isPrimary {
-                                    self.mainContainerNode.currentItemNode.revealScrollHiddenItem()
-                                } else {
-                                    self.inlineStackContainerNode?.currentItemNode.revealScrollHiddenItem()
-                                }
                             }
                         }
                     }
@@ -2544,6 +2571,16 @@ final class ChatListControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
         }
         self.allowOverscrollItemExpansion = false
         self.currentOverscrollItemExpansionTimestamp = nil
+
+        if let archiveAnimationNode = controller?.archiveBottomNode, archiveAnimationNode.activated {
+            archiveAnimationNode.animate()
+
+            if isPrimary {
+                self.mainContainerNode.currentItemNode.revealScrollHiddenItem()
+            } else {
+                self.inlineStackContainerNode?.currentItemNode.revealScrollHiddenItem()
+            }
+        }
     }
     
     private func contentScrollingEnded(listView: ListView, isPrimary: Bool) -> Bool {
@@ -2707,6 +2744,20 @@ final class ChatListControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
             self.mainContainerNode.scrollToTop(animated: true, adjustForTempInset: false)
             self.mainContainerNode.tempTopInset = 0.0
         }
+    }
+
+    private func findChatListItemNode(with groupId: EngineChatList.Group) -> ChatListItemNode? {
+        var founded: ChatListItemNode?
+        mainContainerNode.currentItemNode.forEachItemNode { itemNode in
+            guard founded == nil else { return }
+
+            guard let itemNode = itemNode as? ChatListItemNode else { return }
+            guard case let .groupReference(data) = itemNode.item?.content else { return }
+            guard data.groupId == groupId else { return }
+
+            founded = itemNode
+        }
+        return founded
     }
 }
 
