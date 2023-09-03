@@ -429,7 +429,7 @@ final class ChatListArchiveBottomNode: ASDisplayNode {
 
         let fullMaskLayer = CALayer()
         fullMaskLayer.backgroundColor = UIColor.black.cgColor
-        fullMaskLayer.position = CGPoint(x: 10.0 + 30.0, y: 8.0 + 30.0)
+        fullMaskLayer.position = CGPoint(x: 10.0 + 30.0, y: size.height / 2.0)
         fullMaskLayer.bounds = CGRect(origin: .zero, size: CGSize(width: size.width * 2.0, height: size.width * 2.0))
         fullMaskLayer.cornerRadius = size.width
         layer.mask = fullMaskLayer
@@ -480,6 +480,10 @@ final class ChatListArchiveBottomNode: ASDisplayNode {
 
         if let gradientMask = gradientLayer.mask {
             transition.setPosition(layer: gradientMask, position: CGPoint(x: circleFrame.midX, y: circleFrame.midY))
+        }
+
+        if let fullMaskLayer = layer.mask {
+            transition.setPosition(layer: fullMaskLayer, position: CGPoint(x: 10.0 + 30.0, y: size.height / 2.0))
         }
 
         if activated != previousActivated {
