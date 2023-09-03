@@ -267,6 +267,9 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
                 animationNode.updateState(.navigationBarPreview, sourceNode: sourceNode, controller: controller, size: CGSize(width: supernode.frame.width, height: 44.0), scale: contentScale, animated: false)
             }
 
+            let chatListNode = supernode.supernode
+            chatListNode?.isUserInteractionEnabled = false
+
             let deltaHeight = animationView.bounds.height - animationView.bounds.height * contentScale
             let fromPosition = CGPoint(x: convertedAnimationFrame.midX, y: floor(contentContainerNode.frame.minY + animationView.frame.height / 2.0) - deltaHeight / 2.0)
             animationView.layer.animateSpring(from: NSValue(cgPoint: fromPosition), to: NSValue(cgPoint: CGPoint(x: convertedAnimationFrame.midX, y: convertedAnimationFrame.midY)), keyPath: "position", duration: springDuration, initialVelocity: 0.0, damping: springDamping, removeOnCompletion: false) { [weak animationView, weak controller, weak sourceNode] _ in
@@ -276,6 +279,7 @@ private final class ContextContentAnimatorImpl: ContextContentAnimator {
                 controller?.navigationBar?.buttonsContainerNode.alpha = 1.0
 
                 sourceNode?.alpha = 1.0
+                chatListNode?.isUserInteractionEnabled = true
             }
 
             if let controller = controller {
