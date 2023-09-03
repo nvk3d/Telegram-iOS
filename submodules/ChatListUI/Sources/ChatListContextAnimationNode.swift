@@ -425,10 +425,7 @@ final class ChatListContextAnimationNode: ASDisplayNode {
         if animated {
             layer.animateAlpha(from: from, to: to, duration: duration, delay: delay, timingFunction: timingFunction, removeOnCompletion: removeOnCompletion, completion: completion)
         } else {
-            if !removeOnCompletion {
-                layer.opacity = Float(alpha)
-            }
-            completion?(true)
+            layer.animateAlpha(from: from, to: to, duration: 0.0, delay: 0.0, timingFunction: timingFunction, removeOnCompletion: removeOnCompletion, completion: completion)
         }
     }
 
@@ -436,10 +433,7 @@ final class ChatListContextAnimationNode: ASDisplayNode {
         if animated {
             layer.animateScale(from: from, to: to, duration: duration, delay: delay, timingFunction: timingFunction, removeOnCompletion: removeOnCompletion, completion: completion)
         } else {
-            if !removeOnCompletion {
-                layer.transform = CATransform3DMakeScale(to, to, 1.0)
-            }
-            completion?(true)
+            layer.animateScale(from: from, to: to, duration: 0.0, delay: 0.0, timingFunction: timingFunction, removeOnCompletion: removeOnCompletion, completion: completion)
         }
     }
 
@@ -447,19 +441,7 @@ final class ChatListContextAnimationNode: ASDisplayNode {
         if animated {
             layer.animateSpring(from: from, to: to, keyPath: keyPath, duration: duration, delay: delay, initialVelocity: initialVelocity, damping: damping, removeOnCompletion: removeOnCompletion, additive: additive, completion: completion)
         } else {
-            if !removeOnCompletion {
-                switch keyPath {
-                case "position":
-                    guard let value = to as? NSValue else { break }
-                    layer.position = value.cgPointValue
-                case "bounds":
-                    guard let value = to as? NSValue else { break }
-                    layer.bounds = value.cgRectValue
-                default:
-                    break
-                }
-            }
-            completion?(true)
+            layer.animateSpring(from: from, to: to, keyPath: keyPath, duration: 0.0, delay: 0.0, initialVelocity: initialVelocity, damping: damping, removeOnCompletion: removeOnCompletion, additive: additive, completion: completion)
         }
     }
 
