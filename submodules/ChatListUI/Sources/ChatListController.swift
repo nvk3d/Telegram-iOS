@@ -444,6 +444,12 @@ final class ChatListArchiveBottomNode: ASDisplayNode {
             self.state = .interaction
 
             self.view.removeFromSuperview()
+
+            self.layer.opacity = 1.0
+            self.layer.mask = nil
+
+            self.circleLayer.transform = CATransform3DMakeRotation(.pi, 0.0, 0.0, 1.0)
+            self.gradientLayer.colors = [disabledLeftColor, disabledRightColor].map { $0.cgColor }
         }
     }
 
