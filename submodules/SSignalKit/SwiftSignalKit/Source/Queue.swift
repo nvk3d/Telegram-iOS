@@ -65,11 +65,11 @@ public final class Queue {
         }
     }
     
-    public func sync(_ f: () -> Void) {
+    public func sync<T>(_ f: () -> T) -> T {
         if self.isCurrent() {
-            f()
+            return f()
         } else {
-            self.nativeQueue.sync(execute: f)
+            return self.nativeQueue.sync(execute: f)
         }
     }
     
