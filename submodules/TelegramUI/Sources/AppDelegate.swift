@@ -42,6 +42,7 @@ import TelegramUIDeclareEncodables
 import ContextMenuScreen
 import MetalEngine
 import RecaptchaEnterprise
+import GlassLozenge
 
 #if canImport(AppCenter)
 import AppCenter
@@ -355,7 +356,15 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         if !UIDevice.current.isBatteryMonitoringEnabled {
             UIDevice.current.isBatteryMonitoringEnabled = true
         }
-        
+
+        if #available(iOS 26.0, *) {
+        } else if let context = GlassLozengeContext() {
+            context.setRenderLayer(window.layer)
+            SwitchNode.maybeSetupWithAdditionalContext = { node in
+                node.additionalContext = SwitchGlassContext(targetNode: node)
+            }
+        }
+
         let clearNotificationsManager = ClearNotificationsManager(getNotificationIds: { completion in
             if #available(iOS 10.0, *) {
                 UNUserNotificationCenter.current().getDeliveredNotifications(completionHandler: { notifications in

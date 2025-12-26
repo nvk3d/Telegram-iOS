@@ -11,10 +11,17 @@ private final class MediaPlayerNodeLayerNullAction: NSObject, CAAction {
 }
 
 private final class MediaPlayerNodeLayer: AVSampleBufferDisplayLayer {
+    private(set) var renderTarget: MediaPlayerNodeRenderTarget?
+
     override init() {
         super.init()
+        renderTarget = MediaPlayerNodeRenderTarget(layer: self)
     }
-    
+
+    override init(layer: Any) {
+        super.init(layer: layer)
+    }
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
@@ -25,6 +32,13 @@ private final class MediaPlayerNodeLayer: AVSampleBufferDisplayLayer {
     
     override func action(forKey event: String) -> CAAction? {
         return MediaPlayerNodeLayerNullAction()
+    }
+
+    override func value(forKey key: String) -> Any? {
+        if key == "renderTarget" {
+            return renderTarget
+        }
+        return super.value(forKey: key)
     }
 }
 
@@ -63,6 +77,64 @@ private enum PollStatus: CustomStringConvertible {
     }
 }
 
+final class MediaPlayerNodeRenderTarget: NSObject, AVQueuedSampleBufferRendering {
+    var timebase: CMTimebase {
+        impl?.timebase ?? _timebase
+    }
+    private var _timebase: CMTimebase
+
+    var isReadyForMoreMediaData: Bool {
+        impl?.isReadyForMoreMediaData ?? false
+    }
+
+    @available(iOS 14.5, *)
+    public var hasSufficientMediaDataForReliablePlaybackStart: Bool {
+        impl?.hasSufficientMediaDataForReliablePlaybackStart ?? false
+    }
+
+    private var displayedPixelBuffer: CVPixelBuffer?
+    private weak var impl: AVQueuedSampleBufferRendering?
+
+    convenience init(layer: AVSampleBufferDisplayLayer) {
+        if #available(iOS 17.0, *) {
+            self.init(impl: layer.sampleBufferRenderer)
+        } else {
+            self.init(impl: layer)
+        }
+    }
+
+    init(impl: AVQueuedSampleBufferRendering) {
+        self.impl = impl
+        self._timebase = impl.timebase
+    }
+
+    func enqueue(_ sampleBuffer: CMSampleBuffer) {
+        if let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+            displayedPixelBuffer = pixelBuffer
+        }
+        impl?.enqueue(sampleBuffer)
+    }
+
+    func flush() {
+        impl?.flush()
+    }
+
+    func requestMediaDataWhenReady(on queue: DispatchQueue, using block: @escaping @Sendable () -> Void) {
+        impl?.requestMediaDataWhenReady(on: queue, using: block)
+    }
+
+    func stopRequestingMediaData() {
+        impl?.stopRequestingMediaData()
+    }
+
+    override func value(forKey key: String) -> Any? {
+        if key == "displayedPixelBuffer" {
+            return displayedPixelBuffer
+        }
+        return super.value(forKey: key)
+    }
+}
+
 public final class MediaPlayerNode: ASDisplayNode {
     public var videoInHierarchy: Bool = false
     var canPlaybackWithoutHierarchy: Bool = false
@@ -71,6 +143,12 @@ public final class MediaPlayerNode: ASDisplayNode {
     private var videoNode: MediaPlayerNodeDisplayNode
     
     public private(set) var videoLayer: AVSampleBufferDisplayLayer?
+    var videoRenderTarget: MediaPlayerNodeRenderTarget? {
+        if let videoLayer = videoLayer as? MediaPlayerNodeLayer {
+            return videoLayer.renderTarget
+        }
+        return nil
+    }
     private var videoLayerReadyForDisplayObserver: NSObjectProtocol?
     private var didNotifyVideoLayerReadyForDisplay: Bool = false
     

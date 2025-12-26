@@ -31,6 +31,7 @@ import PeerInfoScreen
 import PeerInfoStoryGridScreen
 import ShareWithPeersScreen
 import ChatEmptyNode
+import GlassLozenge
 import UndoUI
 
 private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceholderNode {
@@ -148,7 +149,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.applicationInFocusDisposable?.dispose()
         self.storyUploadEventsDisposable?.dispose()
     }
-    
+
     public func getContactsController() -> ViewController? {
         return self.contactsController
     }
@@ -186,7 +187,15 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     
         super.containerLayoutUpdated(layout, transition: transition)
     }
-    
+
+    public override func setViewControllers(_ viewControllers: [UIViewController], animated: Bool, completion: @escaping () -> Void) {
+        super.setViewControllers(viewControllers, animated: animated, completion: completion)
+
+        if let context = GlassLozengeContext.current {
+            context.setRenderLayer(viewControllers.last?.view.layer ?? view.layer)
+        }
+    }
+
     public func addRootControllers(showCallsTab: Bool) {
         let tabBarController = TabBarControllerImpl(theme: self.presentationData.theme)
         tabBarController.navigationPresentation = .master

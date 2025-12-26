@@ -978,16 +978,21 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
         
         self.scrollNode = ASScrollNode()
         self.scrollNode.clipsToBounds = true
-        
+        self.scrollNode.layer.name = kGlassIgnorableLayer
+
         self.selectionNode = ASImageNode()
-        
+        self.selectionNode.layer.name = kGlassIgnorableLayer
+
         self.backgroundNode = NavigationBackgroundNode(color: self.presentationData.theme.rootController.tabBar.backgroundColor)
         self.separatorNode = ASDisplayNode()
         self.separatorNode.backgroundColor = self.presentationData.theme.rootController.tabBar.separatorColor
         
         self.mainButtonNode = MainButtonNode()
+        self.mainButtonNode.layer.name = kGlassIgnorableLayer
+
         self.secondaryButtonNode = MainButtonNode()
-        
+        self.secondaryButtonNode.layer.name = kGlassIgnorableLayer
+
         super.init()
                         
         self.addSubnode(self.containerNode)
@@ -1001,7 +1006,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate {
             self.containerNode.addSubnode(self.separatorNode)
             self.containerNode.addSubnode(self.scrollNode)
         }
-        
+
         self.addSubnode(self.secondaryButtonNode)
         self.addSubnode(self.mainButtonNode)
         

@@ -3,6 +3,7 @@
 @interface TGPhotoEditorSliderView : UIControl
 
 @property (nonatomic, copy) void(^interactionBegan)(void);
+@property (nonatomic, copy) void(^interactionChanged)(void);
 @property (nonatomic, copy) void(^interactionEnded)(void);
 @property (nonatomic, copy) void(^reset)(void);
 

@@ -5,6 +5,7 @@ import AsyncDisplayKit
 import TelegramPresentationData
 import LegacyComponents
 import ComponentFlow
+import GlassLozenge
 
 public final class SliderComponent: Component {
     public final class Discrete: Equatable {
@@ -124,7 +125,8 @@ public final class SliderComponent: Component {
     public final class View: UIView {
         private var nativeSliderView: SliderView?
         private var sliderView: TGPhotoEditorSliderView?
-        
+        private var glassLayer: GlassLozengeLayer?
+
         private var component: SliderComponent?
         private weak var state: EmptyComponentState?
         
@@ -191,24 +193,29 @@ public final class SliderComponent: Component {
                 
                 transition.setFrame(view: sliderView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: 44.0)))
             } else {
-                var internalIsTrackingUpdated: ((Bool) -> Void)?
-                if let isTrackingUpdated = component.isTrackingUpdated {
-                    internalIsTrackingUpdated = { [weak self] isTracking in
-                        if let self {
-                            if !"".isEmpty {
-                                if isTracking {
-                                    self.sliderView?.bordered = true
-                                } else {
-                                    DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 0.1, execute: { [weak self] in
-                                        self?.sliderView?.bordered = false
-                                    })
-                                }
-                            }
-                        }
-                        isTrackingUpdated(isTracking)
-                    }
+                let isTrackingUpdated = component.isTrackingUpdated
+                let internalIsTrackingUpdated: (Bool) -> Void = { [weak self] isTracking in
+                    defer { isTrackingUpdated?(isTracking) }
+                    guard let self else { return }
+
+                    let sliderOpacity: CGFloat = isTracking ? 0.0 : 1.0
+                    self.sliderView?.knobView.layer.animateAlpha(from: 1.0 - sliderOpacity, to: sliderOpacity, duration: 0.2)
+                    self.sliderView?.knobView.layer.opacity = Float(sliderOpacity)
+
+                    let glassOpacity: CGFloat = isTracking ? 1.0 : 0.0
+                    self.glassLayer?.animateAlpha(from: 1.0 - glassOpacity, to: glassOpacity, duration: 0.2)
+                    self.glassLayer?.opacity = Float(glassOpacity)
+
+                    let glassFromScale = isTracking ? 1.0 : 1.1
+                    let glassToScale = isTracking ? 1.1 : 1.0
+                    self.glassLayer?.animateScale(from: glassFromScale, to: glassToScale, duration: 0.2)
+                    self.glassLayer?.transform = CATransform3DMakeScale(glassToScale, glassToScale, 1.0)
                 }
-                
+
+                let knobHeight = component.knobSize ?? 22.0
+                let knobWidthKoef: CGFloat = 1.5
+                let knobSize = CGSize(width: knobHeight * knobWidthKoef, height: knobHeight)
+
                 let sliderView: TGPhotoEditorSliderView
                 if let current = self.sliderView {
                     sliderView = current
@@ -241,25 +248,22 @@ public final class SliderComponent: Component {
                     sliderView.backColor = component.trackBackgroundColor
                     sliderView.startColor = component.trackBackgroundColor
                     sliderView.trackColor = component.trackForegroundColor
-                    if let knobSize = component.knobSize {
-                        sliderView.knobImage = generateImage(CGSize(width: 40.0, height: 40.0), rotatedContext: { size, context in
-                            context.clear(CGRect(origin: CGPoint(), size: size))
-                            context.setShadow(offset: CGSize(width: 0.0, height: -3.0), blur: 12.0, color: UIColor(white: 0.0, alpha: 0.25).cgColor)
-                            if let knobColor = component.knobColor {
-                                context.setFillColor(knobColor.cgColor)
-                            } else {
-                                context.setFillColor(UIColor.white.cgColor)
-                            }
-                            context.fillEllipse(in: CGRect(origin: CGPoint(x: floor((size.width - knobSize) * 0.5), y: floor((size.width - knobSize) * 0.5)), size: CGSize(width: knobSize, height: knobSize)))
-                        })
-                    } else {
-                        sliderView.knobImage = generateImage(CGSize(width: 40.0, height: 40.0), rotatedContext: { size, context in
-                            context.clear(CGRect(origin: CGPoint(), size: size))
-                            context.setShadow(offset: CGSize(width: 0.0, height: -3.0), blur: 12.0, color: UIColor(white: 0.0, alpha: 0.25).cgColor)
+
+                    sliderView.knobImage = generateImage(CGSize(width: 40.0 * knobWidthKoef, height: 40.0), rotatedContext: { size, context in
+                        context.clear(CGRect(origin: CGPoint(), size: size))
+                        context.setShadow(offset: CGSize(width: 0.0, height: -3.0), blur: 12.0, color: UIColor(white: 0.0, alpha: 0.25).cgColor)
+                        if let knobColor = component.knobColor {
+                            context.setFillColor(knobColor.cgColor)
+                        } else {
                             context.setFillColor(UIColor.white.cgColor)
-                            context.fillEllipse(in: CGRect(origin: CGPoint(x: 6.0, y: 6.0), size: CGSize(width: 28.0, height: 28.0)))
-                        })
-                    }
+                        }
+                        let path = UIBezierPath(roundedRect: CGRect(
+                            origin: CGPoint(x: floor((size.width - knobSize.width) * 0.5), y: floor((size.height - knobSize.height) * 0.5)),
+                            size: knobSize
+                        ), cornerRadius: knobSize.height / 3.0)
+                        context.addPath(path.cgPath)
+                        context.fillPath()
+                    })
                     
                     sliderView.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: size)
                     sliderView.hitTestEdgeInsets = UIEdgeInsets(top: -sliderView.frame.minX, left: 0.0, bottom: 0.0, right: -sliderView.frame.minX)
@@ -289,14 +293,35 @@ public final class SliderComponent: Component {
                     }
                 }
                 sliderView.interactionBegan = {
-                    internalIsTrackingUpdated?(true)
+                    internalIsTrackingUpdated(true)
+                }
+                sliderView.interactionChanged = {
+                    state.updated(transition: .immediate, isLocal: true)
                 }
                 sliderView.interactionEnded = {
-                    internalIsTrackingUpdated?(false)
+                    internalIsTrackingUpdated(false)
                 }
-                
+
+                let glassLayer: GlassLozengeLayer
+                if let current = self.glassLayer {
+                    glassLayer = current
+                } else {
+                    glassLayer = GlassLozengeLayer(style: .lozenge)
+                    glassLayer.actions = ["position": NSNull(), "bounds": NSNull()]
+                    glassLayer.lozengeParams = glassLayer.lozengeParams.with(refraction: 1.075)
+                    glassLayer.opacity = 0.0
+                    self.glassLayer = glassLayer
+                    layer.addSublayer(glassLayer)
+                }
+
                 transition.setFrame(view: sliderView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: 44.0)))
                 sliderView.hitTestEdgeInsets = UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: 0.0)
+
+                glassLayer.shaderParams = glassLayer.shaderParams.with(cornerRadius: Float(knobSize.height / 3.0))
+
+                transition.setPosition(layer: glassLayer, position: CGPoint(x: sliderView.knobView.frame.midX, y: sliderView.knobView.frame.midY))
+                transition.setBounds(layer: glassLayer, bounds: CGRect(origin: .zero, size: knobSize))
+                glassLayer.update(size: knobSize)
             }
             
             return size

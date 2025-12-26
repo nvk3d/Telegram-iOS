@@ -730,7 +730,9 @@ const CGFloat TGPhotoEditorSliderViewInternalMargin = 7.0f;
     if (!_limitValueChangedToLatestState) {
         [self sendActionsForControlEvents:UIControlEventValueChanged];
     }
-    
+    if (self.interactionChanged != nil)
+        self.interactionChanged();
+
     return true;
 }
 

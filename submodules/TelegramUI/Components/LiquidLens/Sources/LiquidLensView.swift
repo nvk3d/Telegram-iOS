@@ -3,6 +3,7 @@ import UIKit
 import Display
 import ComponentFlow
 import GlassBackgroundComponent
+import GlassLozenge
 
 private final class RestingBackgroundView: UIVisualEffectView {
     var isDark: Bool?
@@ -89,6 +90,8 @@ public final class LiquidLensView: UIView {
     private let backgroundContainer: GlassBackgroundContainerView
     private let backgroundView: GlassBackgroundView
     private var lensView: UIView?
+    private var customLensLayer: GlassLozengeLensLayer?
+    private var customLensSelectionView: UIImageView?
     private let liftedContainerView: UIView
     public let contentView: UIView
     private let restingBackgroundView: RestingBackgroundView
@@ -106,6 +109,10 @@ public final class LiquidLensView: UIView {
     private var appliedLensParams: LensParams?
     private var isApplyingLensParams: Bool = false
     private var pendingLensParams: LensParams?
+
+    private var wasLifted = false
+    private var wasLiftedBeginTime: CFTimeInterval?
+    private var pendingLiftedOut = false
 
     private var liftedDisplayLink: SharedDisplayLinkDriver.Link?
 
@@ -147,8 +154,23 @@ public final class LiquidLensView: UIView {
                 let instance = objcAlloc.perform(initSelector, with: UIView()).takeUnretainedValue()
                 self.lensView = instance as? UIView
             }
+        } else {
+            let customLensLayer = GlassLozengeLensLayer(style: .shader)
+            customLensLayer.actions = [
+                "contents": NSNull(),
+                "position": NSNull(),
+                "bounds": NSNull(),
+                "opacity": NSNull(),
+            ]
+            customLensLayer.opacity = 0.0
+            customLensLayer.paused = true
+            self.customLensLayer = customLensLayer
+
+            let customLensSelectionView = UIImageView()
+            customLensSelectionView.alpha = 0.0
+            self.customLensSelectionView = customLensSelectionView
         }
-        
+
         if let lensView = self.lensView {
             self.backgroundContainer.layer.zPosition = 1
             lensView.layer.zPosition = 10.0
@@ -208,14 +230,19 @@ public final class LiquidLensView: UIView {
             let legacyContentMaskBlobView = UIImageView()
             self.legacyContentMaskBlobView = legacyContentMaskBlobView
             legacyContentMaskView.addSubview(legacyContentMaskBlobView)
-            
+
             self.containerView.addSubview(self.contentView)
-            
+
             let legacyLiftedContentBlobMaskView = UIImageView()
             self.legacyLiftedContentBlobMaskView = legacyLiftedContentBlobMaskView
             self.liftedContainerView.mask = legacyLiftedContentBlobMaskView
             
             self.containerView.addSubview(self.liftedContainerView)
+
+            if let customLensLayer, let customLensSelectionView {
+                self.containerView.layer.addSublayer(customLensLayer)
+                self.containerView.addSubview(customLensSelectionView)
+            }
         }
     }
 
@@ -318,6 +345,18 @@ public final class LiquidLensView: UIView {
 
         self.params = params
 
+        if pendingLiftedOut, params.isLifted {
+            // need to ignore next frame
+            customLensLayer?.paused = true
+        }
+
+        pendingLiftedOut = wasLifted && !params.isLifted
+        wasLifted = params.isLifted
+        if wasLifted {
+            customLensLayer?.paused = false
+            wasLiftedBeginTime = CACurrentMediaTime()
+        }
+
         transition.setFrame(view: self.containerView, frame: CGRect(origin: CGPoint(), size: params.size))
         transition.setFrame(view: self.backgroundContainerContainer, frame: CGRect(origin: CGPoint(), size: params.size))
 
@@ -325,21 +364,65 @@ public final class LiquidLensView: UIView {
         self.backgroundContainer.update(size: params.size, isDark: params.isDark, transition: transition)
         
         transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: params.size))
-        self.backgroundView.update(size: params.size, cornerRadius: params.size.height * 0.5, isDark: params.isDark, tintColor: GlassBackgroundView.TintColor.init(kind: .panel, color: UIColor(white: params.isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
-        
+        self.backgroundView.update(size: params.size, cornerRadius: params.size.height * 0.5, isDark: params.isDark, tintColor: GlassBackgroundView.TintColor.init(kind: .panel, color: UIColor(white: params.isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, isPaused: params.isLifted, transition: transition)
+
         transition.setFrame(view: self.contentView, frame: CGRect(origin: CGPoint(), size: params.size))
         transition.setFrame(view: self.liftedContainerView, frame: CGRect(origin: CGPoint(), size: params.size))
 
         let baseLensFrame = CGRect(origin: CGPoint(x: max(0.0, min(params.selectionX, params.size.width - params.selectionWidth)), y: 0.0), size: CGSize(width: params.selectionWidth, height: params.size.height))
         self.updateLens(params: LensParams(baseFrame: baseLensFrame, isLifted: params.isLifted), animated: !transition.animation.isImmediate)
-        
+
+        if let customLensLayer, let customLensSelectionView {
+            let liftedInset: CGFloat = params.isLifted ? 4.0 : -4.0
+            let liftedLensBounds = CGRect(origin: .zero, size: CGSize(width: baseLensFrame.width + liftedInset * 2.0, height: baseLensFrame.height + liftedInset * 2.0))
+            let scale = liftedLensBounds.width / (baseLensFrame.width + 4.0 * 2.0)
+
+            let lensBounds = CGRect(origin: .zero, size: CGSize(width: baseLensFrame.width + 4.0 * 2.0, height: baseLensFrame.height + 4.0 * 2.0))
+
+            customLensLayer.shaderParams = customLensLayer.shaderParams.with(cornerRadius: Float(lensBounds.height / 2.0))
+
+            transition.setPosition(layer: customLensLayer, position: CGPoint(x: baseLensFrame.midX, y: baseLensFrame.midY))
+            transition.setBounds(layer: customLensLayer, bounds: lensBounds)
+            transition.setTransform(layer: customLensLayer, transform: CATransform3DScale(CATransform3DIdentity, scale, scale, 1.0))
+            customLensLayer.update(size: lensBounds.size)
+
+            transition.setPosition(view: customLensSelectionView, position: CGPoint(x: baseLensFrame.midX, y: baseLensFrame.midY))
+            transition.setBounds(view: customLensSelectionView, bounds: lensBounds)
+            transition.setTransform(layer: customLensSelectionView.layer, transform: CATransform3DScale(CATransform3DIdentity, scale, scale, 1.0))
+
+            if customLensSelectionView.image == nil {
+                customLensSelectionView.image = generateStretchableFilledCircleImage(diameter: lensBounds.height, color: .white)?.withRenderingMode(.alwaysTemplate)
+            }
+            customLensSelectionView.tintColor = UIColor(white: params.isDark ? 1.0 : 0.0, alpha: params.isDark ? 0.1 : 0.075)
+
+            let forceHideLens = wasLiftedBeginTime != nil && CACurrentMediaTime() - wasLiftedBeginTime! < 0.01
+            let containedTransition: ContainedViewLayoutTransition = transition.containedViewLayoutTransition
+            let customLensTransition: ContainedViewLayoutTransition = forceHideLens ? .immediate : containedTransition
+
+            if forceHideLens {
+                customLensLayer.removeAnimation(forKey: "opacity")
+            }
+            customLensTransition.updateAlpha(layer: customLensLayer, alpha: params.isLifted ? 1.0 : 0.0, beginWithCurrentState: customLensLayer.animation(forKey: "opacity") != nil) { [weak self] finished in
+                guard finished, let self, self.pendingLiftedOut else { return }
+
+                self.pendingLiftedOut = false
+                self.wasLiftedBeginTime = nil
+                self.customLensLayer?.paused = true
+            }
+            containedTransition.updateAlpha(layer: customLensSelectionView.layer, alpha: params.isLifted ? 1.0 : 0.0, beginWithCurrentState: customLensSelectionView.layer.animation(forKey: "opacity") != nil)
+
+            if pendingLiftedOut {
+                customLensLayer.animateViewport(with: containedTransition)
+            }
+        }
+
         if let legacyContentMaskView = self.legacyContentMaskView {
             transition.setFrame(view: legacyContentMaskView, frame: CGRect(origin: CGPoint(), size: params.size))
         }
         if let legacyContentMaskBlobView = self.legacyContentMaskBlobView, let legacyLiftedContentBlobMaskView = self.legacyLiftedContentBlobMaskView, let legacySelectionView = self.legacySelectionView {
             let lensFrame = baseLensFrame.insetBy(dx: 4.0, dy: 4.0)
-            let effectiveLensFrame = lensFrame.insetBy(dx: params.isLifted ? -2.0 : 0.0, dy: params.isLifted ? -2.0 : 0.0)
-            
+            let effectiveLensFrame = lensFrame.insetBy(dx: params.isLifted ? -5.0 : 0.0, dy: params.isLifted ? -5.0 : 0.0)
+
             if legacyContentMaskBlobView.image?.size.height != lensFrame.height {
                 legacyContentMaskBlobView.image = generateStretchableFilledCircleImage(diameter: lensFrame.height, color: .black)
                 legacyLiftedContentBlobMaskView.image = legacyContentMaskBlobView.image
@@ -350,6 +433,7 @@ public final class LiquidLensView: UIView {
             
             legacySelectionView.tintColor = UIColor(white: params.isDark ? 1.0 : 0.0, alpha: params.isDark ? 0.1 : 0.075)
             transition.setFrame(view: legacySelectionView, frame: effectiveLensFrame)
+            transition.setAlpha(view: legacySelectionView, alpha: params.isLifted ? 0.0 : 1.0)
         }
 
         transition.setFrame(view: self.restingBackgroundView, frame: CGRect(origin: CGPoint(), size: params.size))

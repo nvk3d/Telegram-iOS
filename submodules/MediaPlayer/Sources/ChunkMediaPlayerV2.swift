@@ -173,7 +173,9 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
     private let renderSynchronizer: AVSampleBufferRenderSynchronizer
     private var videoRenderer: AVSampleBufferDisplayLayer
     private var audioRenderer: AVSampleBufferAudioRenderer?
-    
+
+    private var videoRenderTarget: AVQueuedSampleBufferRendering
+
     private var didNotifySentVideoFrames: Bool = false
     
     private var partsState = ChunkMediaPlayerPartsState(duration: nil, content: .parts([]))
@@ -267,7 +269,8 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
             assertionFailure()
         }
         self.videoRenderer = playerNode.videoLayer ?? AVSampleBufferDisplayLayer()
-        
+        self.videoRenderTarget = playerNode.videoRenderTarget ?? MediaPlayerNodeRenderTarget(layer: self.videoRenderer)
+
         switch source {
         case let .externalParts(partsState):
             self.source = ChunkMediaPlayerExternalSourceImpl(partsState: partsState)
@@ -953,13 +956,8 @@ public final class ChunkMediaPlayerV2: ChunkMediaPlayer {
         
         if !self.videoIsRequestingMediaData {
             self.videoIsRequestingMediaData = true
-            
-            let videoTarget: AVQueuedSampleBufferRendering
-            if #available(iOS 17.0, *) {
-                videoTarget = self.videoRenderer.sampleBufferRenderer
-            } else {
-                videoTarget = self.videoRenderer
-            }
+
+            let videoTarget = self.videoRenderTarget
         
             let didNotifySentVideoFrames = self.didNotifySentVideoFrames
             videoTarget.requestMediaDataWhenReady(on: self.dataQueue.queue, using: { [weak self] in

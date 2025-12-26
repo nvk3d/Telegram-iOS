@@ -191,7 +191,8 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         
         self.sendContainerNode = ASDisplayNode()
         self.sendContainerNode.layer.allowsGroupOpacity = true
-        
+        self.sendContainerNode.layer.name = kGlassIgnorableLayer
+
         self.sendButtonBackgroundView = UIImageView()
         self.sendButtonBackgroundView.image = generateStretchableFilledCircleImage(diameter: 34.0, color: .white)?.withRenderingMode(.alwaysTemplate)
         self.sendButton = HighlightTrackingButtonNode(pointerStyle: nil)

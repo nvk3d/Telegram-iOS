@@ -6,6 +6,9 @@ import ComponentDisplayAdapters
 import UIKitRuntimeUtils
 import CoreImage
 import AppBundle
+import GlassLozenge
+
+public let kGlassIgnorableLayer = kGlassLozengeIgnorableLayer
 
 private final class ContentContainer: UIView {
     private let maskContentView: UIView
@@ -302,11 +305,13 @@ public class GlassBackgroundView: UIView {
     }
     
     private let backgroundNode: NavigationBackgroundNode?
-    
+
     private let nativeView: UIVisualEffectView?
     private let nativeViewClippingContext: ClippingShapeContext?
     private let nativeParamsView: EffectSettingsContainerView?
-    
+
+    private let glassLozengeLayer: GlassLozengeLayer?
+
     private let foregroundView: UIImageView?
     private let shadowView: UIImageView?
     
@@ -331,7 +336,8 @@ public class GlassBackgroundView: UIView {
     public override init(frame: CGRect) {
         if #available(iOS 26.0, *), !GlassBackgroundView.useCustomGlassImpl {
             self.backgroundNode = nil
-            
+            self.glassLozengeLayer = nil
+
             let glassEffect = UIGlassEffect(style: .regular)
             glassEffect.isInteractive = false
             let nativeView = UIVisualEffectView(effect: glassEffect)
@@ -346,16 +352,19 @@ public class GlassBackgroundView: UIView {
             self.foregroundView = nil
             self.shadowView = nil
         } else {
-            let backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 8.0)
+            let backgroundNode = NavigationBackgroundNode(color: .black, enableBlur: true, customBlurRadius: 2.0)
             self.backgroundNode = backgroundNode
             self.nativeView = nil
             self.nativeViewClippingContext = nil
             self.nativeParamsView = nil
+
+            let glassLozengeLayer = GlassLozengeLayer(style: .shader)
+            self.glassLozengeLayer = glassLozengeLayer
+
             self.foregroundView = UIImageView()
-            
-            self.shadowView = UIImageView()
+            self.shadowView = nil //UIImageView()
         }
-        
+
         self.maskContainerView = UIView()
         self.maskContainerView.backgroundColor = .white
         if let filter = CALayer.luminanceToAlpha() {
@@ -374,6 +383,9 @@ public class GlassBackgroundView: UIView {
         }
         if let nativeParamsView = self.nativeParamsView {
             self.addSubview(nativeParamsView)
+        }
+        if let glassLozengeLayer = self.glassLozengeLayer {
+            self.layer.addSublayer(glassLozengeLayer)
         }
         if let backgroundNode = self.backgroundNode {
             self.addSubview(backgroundNode.view)
@@ -402,11 +414,11 @@ public class GlassBackgroundView: UIView {
         return nil
     }
         
-    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
-        self.update(size: size, shape: .roundedRect(cornerRadius: cornerRadius), isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, transition: transition)
+    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, isPaused: Bool = false, transition: ComponentTransition) {
+        self.update(size: size, shape: .roundedRect(cornerRadius: cornerRadius), isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, isPaused: isPaused, transition: transition)
     }
     
-    public func update(size: CGSize, shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, transition: ComponentTransition) {
+    public func update(size: CGSize, shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, isPaused: Bool = false, transition: ComponentTransition) {
         if let nativeView = self.nativeView, let nativeViewClippingContext = self.nativeViewClippingContext, (nativeView.bounds.size != size || nativeViewClippingContext.shape != shape) {
             
             nativeViewClippingContext.update(shape: shape, size: size, transition: transition)
@@ -416,6 +428,14 @@ public class GlassBackgroundView: UIView {
                 let nativeFrame = CGRect(origin: CGPoint(), size: size)
                 transition.setFrame(view: nativeView, frame: nativeFrame)
             }
+        }
+        if let glassLozengeLayer = self.glassLozengeLayer, case let .roundedRect(cornerRadius) = shape {
+            glassLozengeLayer.paused = isPaused
+            glassLozengeLayer.shaderParams = glassLozengeLayer.shaderParams.with(cornerRadius: Float(cornerRadius))
+
+            let glassLozengeFrame = CGRect(origin: .zero, size: size)
+            transition.setFrame(layer: glassLozengeLayer, frame: glassLozengeFrame)
+            glassLozengeLayer.update(size: glassLozengeFrame.size)
         }
         if let backgroundNode = self.backgroundNode {
             backgroundNode.updateColor(color: .clear, forceKeepBlur: tintColor.color.alpha != 1.0, transition: transition.containedViewLayoutTransition)

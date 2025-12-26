@@ -1613,7 +1613,7 @@ open class NavigationController: UINavigationController, ContainableController, 
         self.setViewControllers(viewControllers, animated: animated, completion: {})
     }
     
-    public func setViewControllers(_ viewControllers: [UIViewController], animated: Bool, completion: @escaping () -> Void) {
+    open func setViewControllers(_ viewControllers: [UIViewController], animated: Bool, completion: @escaping () -> Void) {
         let requestedViewControllers = viewControllers
         var viewControllers: [UIViewController] = []
         for controller in requestedViewControllers {
