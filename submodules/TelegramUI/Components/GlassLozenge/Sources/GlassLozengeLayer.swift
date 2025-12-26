@@ -284,16 +284,6 @@ open class GlassLozengeLayer: CAMetalLayer, GlassLozengeRenderTarget {
             assertionFailure("can't create shader context")
             return
         }
-
-        //let refractionKoef = UIDevice.current.orientation.isLandscape ? 0.02 : 0.015
-//        let params = GlassShaderContext.Params(
-//            blurSteps: blurSteps,
-//            cornerRadius: cornerRadius * contentsScale,
-//            position: CGPoint(x: bounds.midX * contentsScale, y: bounds.midY * contentsScale),
-//            size: CGSize(width: bounds.width * contentsScale, height: bounds.height * contentsScale),
-//            refraction: 0.1, //refraction * refractionKoef,
-//            tintColor: .clear // tmp
-//        )
         shaderContext.process(processingTexture, drawable: drawable, context: context, params: shaderParams)
     }
 }

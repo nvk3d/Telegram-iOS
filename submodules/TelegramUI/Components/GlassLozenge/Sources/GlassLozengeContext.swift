@@ -61,7 +61,6 @@ public final class GlassLozengeContext {
     private var ignoreNextRender = false
 
     private var renderTargets: [WeakRenderTarget] = []
-    private var renderTargetIds: Set<ObjectIdentifier> = []
 
     private var previousTime: CFTimeInterval = 0.0
     private var displayLink: SharedDisplayLinkDriverLink?
